@@ -231,6 +231,7 @@ struct AppWindowView: View {
 private final class WorkspaceShortcutEventMonitor: ObservableObject {
     private var monitor: Any?
     private var handler: ((WorkspaceCommandID) -> Void)?
+    private var pressedShortcutIdentities = Set<String>()
 
     func start(handler: @escaping (WorkspaceCommandID) -> Void) {
         self.handler = handler
@@ -239,7 +240,7 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
             return
         }
 
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             self?.handle(event) ?? event
         }
     }
@@ -251,6 +252,7 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
 
         monitor = nil
         handler = nil
+        pressedShortcutIdentities.removeAll()
     }
 
     deinit {
@@ -258,40 +260,54 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
     }
 
     private func handle(_ event: NSEvent) -> NSEvent? {
-        guard let commandID = WorkspaceReservedShortcut.commandID(for: event) else {
+        guard let shortcut = WorkspaceReservedShortcut.recognize(event) else {
             return event
         }
 
-        guard !event.isARepeat else {
+        if event.type == .keyUp {
+            pressedShortcutIdentities.remove(shortcut.identity)
             return nil
         }
 
-        handler?(commandID)
+        guard event.type == .keyDown,
+              !event.isARepeat,
+              !pressedShortcutIdentities.contains(shortcut.identity) else {
+            return nil
+        }
+
+        pressedShortcutIdentities.insert(shortcut.identity)
+        handler?(shortcut.commandID)
         return nil
     }
 }
 
 private enum WorkspaceReservedShortcut {
+    struct RecognizedShortcut {
+        let commandID: WorkspaceCommandID
+        let identity: String
+    }
+
     private static let workspaceModifierFlags: NSEvent.ModifierFlags = [.control, .shift]
     private static let movementModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command]
     private static let comparedModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command, .option]
 
-    static func commandID(for event: NSEvent) -> WorkspaceCommandID? {
+    static func recognize(_ event: NSEvent) -> RecognizedShortcut? {
         let modifiers = event.modifierFlags.intersection(comparedModifierFlags)
+        let identity = "\(event.keyCode)-\(modifiers.rawValue)"
 
         if modifiers == workspaceModifierFlags {
             switch event.keyCode {
             case 123:
-                return .focusLeft
+                return RecognizedShortcut(commandID: .focusLeft, identity: identity)
             case 124:
-                return .focusRight
+                return RecognizedShortcut(commandID: .focusRight, identity: identity)
             case 126:
-                return .focusUp
+                return RecognizedShortcut(commandID: .focusUp, identity: identity)
             case 125:
-                return .focusDown
+                return RecognizedShortcut(commandID: .focusDown, identity: identity)
             default:
                 if event.charactersIgnoringModifiers == "/" {
-                    return .showShortcutOverlay
+                    return RecognizedShortcut(commandID: .showShortcutOverlay, identity: identity)
                 }
             }
         }
@@ -299,13 +315,13 @@ private enum WorkspaceReservedShortcut {
         if modifiers == movementModifierFlags {
             switch event.keyCode {
             case 123:
-                return .moveColumnLeft
+                return RecognizedShortcut(commandID: .moveColumnLeft, identity: identity)
             case 124:
-                return .moveColumnRight
+                return RecognizedShortcut(commandID: .moveColumnRight, identity: identity)
             case 126:
-                return .transferColumnUp
+                return RecognizedShortcut(commandID: .transferColumnUp, identity: identity)
             case 125:
-                return .transferColumnDown
+                return RecognizedShortcut(commandID: .transferColumnDown, identity: identity)
             default:
                 return nil
             }
