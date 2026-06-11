@@ -125,6 +125,8 @@ struct AppWindowView: View {
     let shortcutOverlayModel: ShortcutOverlayModel
     @Binding var isShortcutOverlayPresented: Bool
 
+    @StateObject private var shortcutEventMonitor = WorkspaceShortcutEventMonitor()
+
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             WorkspaceRail(
@@ -189,6 +191,14 @@ struct AppWindowView: View {
         .sheet(isPresented: $isShortcutOverlayPresented) {
             ShortcutOverlayView(model: shortcutOverlayModel)
         }
+        .onAppear {
+            shortcutEventMonitor.start { commandID in
+                handleWorkspaceShortcut(commandID)
+            }
+        }
+        .onDisappear {
+            shortcutEventMonitor.stop()
+        }
     }
 
     private var focusedWorkspace: EnumeratedSequence<[Workspace]>.Element? {
@@ -201,6 +211,112 @@ struct AppWindowView: View {
         let workspaceCount = workspaceStack.workspaces.count
         let label = workspaceCount == 1 ? "Workspace" : "Workspaces"
         return "\(workspaceCount) \(label) - one Empty Workspace"
+    }
+
+    private func handleWorkspaceShortcut(_ commandID: WorkspaceCommandID) {
+        switch commandID {
+        case .focusLeft:
+            workspaceStack.moveFocus(.left, visibleColumnCount: 2)
+        case .focusRight:
+            workspaceStack.moveFocus(.right, visibleColumnCount: 2)
+        case .focusUp:
+            workspaceStack.moveFocus(.up, visibleColumnCount: 2)
+        case .focusDown:
+            workspaceStack.moveFocus(.down, visibleColumnCount: 2)
+        case .moveColumnLeft:
+            workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
+        case .moveColumnRight:
+            workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
+        case .transferColumnUp:
+            workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
+        case .transferColumnDown:
+            workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
+        case .showShortcutOverlay:
+            isShortcutOverlayPresented = true
+        }
+    }
+}
+
+private final class WorkspaceShortcutEventMonitor: ObservableObject {
+    private var monitor: Any?
+    private var handler: ((WorkspaceCommandID) -> Void)?
+
+    func start(handler: @escaping (WorkspaceCommandID) -> Void) {
+        self.handler = handler
+
+        guard monitor == nil else {
+            return
+        }
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handle(event) ?? event
+        }
+    }
+
+    func stop() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+
+        monitor = nil
+        handler = nil
+    }
+
+    deinit {
+        stop()
+    }
+
+    private func handle(_ event: NSEvent) -> NSEvent? {
+        guard let commandID = WorkspaceReservedShortcut.commandID(for: event) else {
+            return event
+        }
+
+        handler?(commandID)
+        return nil
+    }
+}
+
+private enum WorkspaceReservedShortcut {
+    private static let workspaceModifierFlags: NSEvent.ModifierFlags = [.control, .shift]
+    private static let movementModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command]
+    private static let comparedModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command, .option]
+
+    static func commandID(for event: NSEvent) -> WorkspaceCommandID? {
+        let modifiers = event.modifierFlags.intersection(comparedModifierFlags)
+
+        if modifiers == workspaceModifierFlags {
+            switch event.keyCode {
+            case 123:
+                return .focusLeft
+            case 124:
+                return .focusRight
+            case 126:
+                return .focusUp
+            case 125:
+                return .focusDown
+            default:
+                if event.charactersIgnoringModifiers == "/" {
+                    return .showShortcutOverlay
+                }
+            }
+        }
+
+        if modifiers == movementModifierFlags {
+            switch event.keyCode {
+            case 123:
+                return .moveColumnLeft
+            case 124:
+                return .moveColumnRight
+            case 126:
+                return .transferColumnUp
+            case 125:
+                return .transferColumnDown
+            default:
+                return nil
+            }
+        }
+
+        return nil
     }
 }
 
