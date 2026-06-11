@@ -389,6 +389,68 @@ final class WorkspaceStackTests: XCTestCase {
         XCTAssertEqual(restored.workspaces[0].columns[0].windows[0].restoreMetadata.browserURL?.absoluteString, "https://example.com/docs")
     }
 
+    func testNewTerminalWindowDirectoryUsesFocusedTerminalCurrentDirectoryBeforeWorkspaceRoot() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createWindow(kind: .terminal)
+        let firstTerminalWindowID = stack.workspaces[0].columns[0].windows[0].id
+        stack.updateTerminalCurrentDirectory(
+            URL(filePath: "/Users/tester/project/Sources"),
+            for: firstTerminalWindowID
+        )
+
+        stack.createTerminalWindow()
+
+        XCTAssertEqual(stack.workspaces[0].columns[1].windows[0].kind, .terminal)
+        XCTAssertEqual(
+            stack.workspaces[0].columns[1].windows[0].restoreMetadata.terminalCurrentDirectory?.path(),
+            "/Users/tester/project/Sources"
+        )
+    }
+
+    func testNewTerminalWindowDirectoryFallsBackToWorkspaceRoot() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+
+        stack.createTerminalWindow()
+
+        XCTAssertEqual(
+            stack.workspaces[0].columns[0].windows[0].restoreMetadata.terminalCurrentDirectory?.path(),
+            "/Users/tester/project"
+        )
+    }
+
+    func testExitedTerminalWindowRemainsNonEmptyUntilClosedOrRestarted() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createTerminalWindow()
+        let terminalWindowID = stack.workspaces[0].columns[0].windows[0].id
+
+        stack.markTerminalExited(windowID: terminalWindowID)
+
+        XCTAssertFalse(stack.workspaces[0].isEmptyWorkspace)
+        XCTAssertTrue(stack.workspaces[0].columns[0].windows[0].restoreMetadata.isTerminalExited)
+
+        stack.restartTerminal(windowID: terminalWindowID)
+
+        XCTAssertFalse(stack.workspaces[0].columns[0].windows[0].restoreMetadata.isTerminalExited)
+    }
+
+    func testRestoredExitedTerminalStartsFreshShellInLastKnownDirectory() throws {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createTerminalWindow()
+        let terminalWindowID = stack.workspaces[0].columns[0].windows[0].id
+        stack.updateTerminalCurrentDirectory(URL(filePath: "/Users/tester/project/Sources"), for: terminalWindowID)
+        stack.markTerminalExited(windowID: terminalWindowID)
+
+        let data = try JSONEncoder().encode(WorkspaceStackSnapshot(stack: stack))
+        let snapshot = try JSONDecoder().decode(WorkspaceStackSnapshot.self, from: data)
+        let restored = WorkspaceStack.restore(from: snapshot, defaultWorkspaceRoot: URL(filePath: "/Users/tester"))
+
+        XCTAssertEqual(
+            restored.workspaces[0].columns[0].windows[0].restoreMetadata.terminalCurrentDirectory?.path(),
+            "/Users/tester/project/Sources"
+        )
+        XCTAssertFalse(restored.workspaces[0].columns[0].windows[0].restoreMetadata.isTerminalExited)
+    }
+
     func testBrowserAddressNormalizerPreservesExplicitSchemesAndAboutBlank() {
         XCTAssertEqual(
             BrowserAddressNormalizer.normalizedURL(from: "about:blank")?.absoluteString,

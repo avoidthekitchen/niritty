@@ -23,11 +23,37 @@ let package = Package(
         ),
         .executableTarget(
             name: "Niritty",
-            dependencies: ["NirittyWorkspaceModel"]
+            dependencies: [
+                "NirittyWorkspaceModel",
+                "NirittyGhosttyTerminal"
+            ]
+        ),
+        .target(
+            name: "NirittyGhosttyTerminal",
+            dependencies: [
+                .target(name: "NirittyWorkspaceModel"),
+                .target(name: "GhosttyKit")
+            ],
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+                .linkedLibrary("c++")
+            ]
+        ),
+        .binaryTarget(
+            name: "GhosttyKit",
+            path: "Vendor/ghostty/macos/GhosttyKit.xcframework"
         ),
         .testTarget(
             name: "NirittyWorkspaceModelTests",
             dependencies: ["NirittyWorkspaceModel"]
+        ),
+        .testTarget(
+            name: "NirittyGhosttyTerminalTests",
+            dependencies: ["NirittyGhosttyTerminal"]
+        ),
+        .testTarget(
+            name: "NirittyBuildSupportTests",
+            dependencies: []
         )
     ]
 )

@@ -11,8 +11,10 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
+APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+GHOSTTY_RESOURCES="$ROOT_DIR/Vendor/ghostty/zig-out/share/ghostty"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -21,8 +23,17 @@ BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS"
+mkdir -p "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+
+if [[ -d "$GHOSTTY_RESOURCES" ]]; then
+  cp -R "$GHOSTTY_RESOURCES" "$APP_RESOURCES/ghostty"
+else
+  echo "Missing Ghostty resources at $GHOSTTY_RESOURCES" >&2
+  echo "Run script/ensure_ghosttykit.sh before packaging Niritty." >&2
+  exit 1
+fi
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
