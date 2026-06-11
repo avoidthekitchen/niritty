@@ -1,8 +1,16 @@
 import AppKit
 import Foundation
 import NirittyWorkspaceModel
+import OSLog
 import SwiftUI
 import WebKit
+
+private enum NirittyTelemetry {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "app.niritty.Niritty"
+
+    static let shortcuts = Logger(subsystem: subsystem, category: "Shortcuts")
+    static let workspace = Logger(subsystem: subsystem, category: "Workspace")
+}
 
 @main
 struct NirittyApp: App {
@@ -205,6 +213,8 @@ struct AppWindowView: View {
     }
 
     private func handleWorkspaceShortcut(_ commandID: WorkspaceCommandID) {
+        let before = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
+
         switch commandID {
         case .focusLeft:
             workspaceStack.moveFocus(.left, visibleColumnCount: 2)
@@ -225,6 +235,38 @@ struct AppWindowView: View {
         case .showShortcutOverlay:
             isShortcutOverlayPresented = true
         }
+
+        let after = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
+        NirittyTelemetry.workspace.info(
+            "Workspace command \(commandID.telemetryName, privacy: .public): before=\(before.description, privacy: .public) after=\(after.description, privacy: .public)"
+        )
+    }
+}
+
+private struct WorkspaceFocusTelemetryState {
+    let focusedWorkspaceIndex: Int?
+    let focusedWorkspaceID: String
+    let focusedColumnIndex: Int?
+    let workspaceColumnCounts: [Int]
+
+    init(workspaceStack: WorkspaceStack) {
+        focusedWorkspaceIndex = workspaceStack.workspaces.firstIndex { workspace in
+            workspace.id == workspaceStack.focusedWorkspaceID
+        }
+        focusedWorkspaceID = workspaceStack.focusedWorkspaceID.uuidString
+        workspaceColumnCounts = workspaceStack.workspaces.map(\.columns.count)
+
+        if let focusedWorkspaceIndex {
+            focusedColumnIndex = workspaceStack.workspaces[focusedWorkspaceIndex].focusedColumnIndex
+        } else {
+            focusedColumnIndex = nil
+        }
+    }
+
+    var description: String {
+        let workspaceLabel = focusedWorkspaceIndex.map { "w\($0 + 1)" } ?? "missing"
+        let columnLabel = focusedColumnIndex.map { "c\($0 + 1)" } ?? "no-column"
+        return "\(workspaceLabel)/\(columnLabel) id=\(focusedWorkspaceID) columns=\(workspaceColumnCounts)"
     }
 }
 
@@ -237,17 +279,20 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
         self.handler = handler
 
         guard monitor == nil else {
+            NirittyTelemetry.shortcuts.debug("Shortcut monitor start skipped because it is already active")
             return
         }
 
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             self?.handle(event) ?? event
         }
+        NirittyTelemetry.shortcuts.info("Shortcut monitor started")
     }
 
     func stop() {
         if let monitor {
             NSEvent.removeMonitor(monitor)
+            NirittyTelemetry.shortcuts.info("Shortcut monitor stopped")
         }
 
         monitor = nil
@@ -266,16 +311,31 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
 
         if event.type == .keyUp {
             pressedShortcutIdentities.remove(shortcut.identity)
+            NirittyTelemetry.shortcuts.debug(
+                "Shortcut keyUp consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
+            )
             return nil
         }
 
         guard event.type == .keyDown,
-              !event.isARepeat,
-              !pressedShortcutIdentities.contains(shortcut.identity) else {
+              !event.isARepeat else {
+            NirittyTelemetry.shortcuts.debug(
+                "Shortcut event consumed without dispatch command=\(shortcut.commandID.telemetryName, privacy: .public) type=\(event.type.telemetryName, privacy: .public) repeat=\(event.isARepeat, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
+            )
+            return nil
+        }
+
+        guard !pressedShortcutIdentities.contains(shortcut.identity) else {
+            NirittyTelemetry.shortcuts.info(
+                "Duplicate shortcut keyDown consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
+            )
             return nil
         }
 
         pressedShortcutIdentities.insert(shortcut.identity)
+        NirittyTelemetry.shortcuts.info(
+            "Shortcut dispatched command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) modifiers=\(shortcut.modifierDescription, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
+        )
         handler?(shortcut.commandID)
         return nil
     }
@@ -285,6 +345,7 @@ private enum WorkspaceReservedShortcut {
     struct RecognizedShortcut {
         let commandID: WorkspaceCommandID
         let identity: String
+        let modifierDescription: String
     }
 
     private static let workspaceModifierFlags: NSEvent.ModifierFlags = [.control, .shift]
@@ -294,20 +355,21 @@ private enum WorkspaceReservedShortcut {
     static func recognize(_ event: NSEvent) -> RecognizedShortcut? {
         let modifiers = event.modifierFlags.intersection(comparedModifierFlags)
         let identity = "\(event.keyCode)-\(modifiers.rawValue)"
+        let modifierDescription = modifiers.telemetryDescription
 
         if modifiers == workspaceModifierFlags {
             switch event.keyCode {
             case 123:
-                return RecognizedShortcut(commandID: .focusLeft, identity: identity)
+                return RecognizedShortcut(commandID: .focusLeft, identity: identity, modifierDescription: modifierDescription)
             case 124:
-                return RecognizedShortcut(commandID: .focusRight, identity: identity)
+                return RecognizedShortcut(commandID: .focusRight, identity: identity, modifierDescription: modifierDescription)
             case 126:
-                return RecognizedShortcut(commandID: .focusUp, identity: identity)
+                return RecognizedShortcut(commandID: .focusUp, identity: identity, modifierDescription: modifierDescription)
             case 125:
-                return RecognizedShortcut(commandID: .focusDown, identity: identity)
+                return RecognizedShortcut(commandID: .focusDown, identity: identity, modifierDescription: modifierDescription)
             default:
                 if event.charactersIgnoringModifiers == "/" {
-                    return RecognizedShortcut(commandID: .showShortcutOverlay, identity: identity)
+                    return RecognizedShortcut(commandID: .showShortcutOverlay, identity: identity, modifierDescription: modifierDescription)
                 }
             }
         }
@@ -315,19 +377,62 @@ private enum WorkspaceReservedShortcut {
         if modifiers == movementModifierFlags {
             switch event.keyCode {
             case 123:
-                return RecognizedShortcut(commandID: .moveColumnLeft, identity: identity)
+                return RecognizedShortcut(commandID: .moveColumnLeft, identity: identity, modifierDescription: modifierDescription)
             case 124:
-                return RecognizedShortcut(commandID: .moveColumnRight, identity: identity)
+                return RecognizedShortcut(commandID: .moveColumnRight, identity: identity, modifierDescription: modifierDescription)
             case 126:
-                return RecognizedShortcut(commandID: .transferColumnUp, identity: identity)
+                return RecognizedShortcut(commandID: .transferColumnUp, identity: identity, modifierDescription: modifierDescription)
             case 125:
-                return RecognizedShortcut(commandID: .transferColumnDown, identity: identity)
+                return RecognizedShortcut(commandID: .transferColumnDown, identity: identity, modifierDescription: modifierDescription)
             default:
                 return nil
             }
         }
 
         return nil
+    }
+}
+
+private extension WorkspaceCommandID {
+    var telemetryName: String {
+        rawValue
+    }
+}
+
+private extension NSEvent.EventType {
+    var telemetryName: String {
+        switch self {
+        case .keyDown:
+            "keyDown"
+        case .keyUp:
+            "keyUp"
+        default:
+            "event-\(rawValue)"
+        }
+    }
+}
+
+private extension NSEvent.ModifierFlags {
+    var telemetryDescription: String {
+        var names: [String] = []
+
+        if contains(.control) {
+            names.append("control")
+        }
+
+        if contains(.shift) {
+            names.append("shift")
+        }
+
+        if contains(.command) {
+            names.append("command")
+        }
+
+        if contains(.option) {
+            names.append("option")
+        }
+
+        return names.joined(separator: "+")
     }
 }
 

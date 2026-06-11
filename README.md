@@ -80,4 +80,17 @@ V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 - Browser engine: `WKWebView`
 - Layout engine: custom Niri-inspired Workspace/Column model
 
+## Runtime Telemetry
+
+Niritty emits lightweight unified logs for workspace shortcut routing and focus transitions. To run the app with a live telemetry stream:
+
+```sh
+./script/build_and_run.sh --telemetry
+```
+
+Useful categories:
+
+- `Shortcuts`: reserved key recognition, dispatch, duplicate suppression, and key-up consumption.
+- `Workspace`: before/after focused workspace and column state for workspace commands.
+
 See [docs/prd-v1.md](docs/prd-v1.md) for the v1 product requirements draft.
