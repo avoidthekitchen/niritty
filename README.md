@@ -46,9 +46,9 @@ Niritty v1 should support:
 
 V1 uses fixed workspace shortcuts. Configurable keybindings are deferred, but the command model should be designed so remapping can be added later.
 
-- `Ctrl+Option+Arrow`: move focus
-- `Ctrl+Option+Command+Arrow`: move or transfer the focused column
-- `Ctrl+Option+Command+/`: show the shortcut overlay
+- `Ctrl+Shift+Arrow`: move focus
+- `Ctrl+Shift+Command+Arrow`: move or transfer the focused column
+- `Ctrl+Shift+/`: show the shortcut overlay
 
 ## Deferred Beyond V1
 
@@ -79,5 +79,17 @@ V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 - Terminal engine: `libghostty`
 - Browser engine: `WKWebView`
 - Layout engine: custom Niri-inspired Workspace/Column model
+
+## Runtime Telemetry
+
+Niritty emits lightweight unified logs for workspace command transitions. To run the app with a live telemetry stream:
+
+```sh
+./script/build_and_run.sh --telemetry
+```
+
+Useful categories:
+
+- `Workspace`: before/after focused workspace and column state for workspace commands.
 
 See [docs/prd-v1.md](docs/prd-v1.md) for the v1 product requirements draft.

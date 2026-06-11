@@ -72,16 +72,16 @@ Workspace Roots are passive in v1:
 
 Focus is spatial.
 
-- `Ctrl+Option+Left/Right` moves focus across columns in the current Workspace.
-- `Ctrl+Option+Up/Down` moves focus vertically.
+- `Ctrl+Shift+Left/Right` moves focus across columns in the current Workspace.
+- `Ctrl+Shift+Up/Down` moves focus vertically.
 - Vertical focus crossing targets the same column index when available, falling back to nearest horizontal position.
 - Crossing into a Workspace updates that Workspace's focused Window and horizontal scroll position.
 - Focus movement uses minimal scroll to reveal the focused Window.
 
 Columns are the layout units that move.
 
-- `Ctrl+Option+Command+Left/Right` reorders the focused Window's Column within the current Workspace.
-- `Ctrl+Option+Command+Up/Down` transfers the focused Window's Column to the adjacent Workspace.
+- `Ctrl+Shift+Command+Left/Right` reorders the focused Window's Column within the current Workspace.
+- `Ctrl+Shift+Command+Up/Down` transfers the focused Window's Column to the adjacent Workspace.
 - Focus follows the moved or transferred Column.
 - Moving down into the bottom Empty Workspace creates a new Empty Workspace below it.
 
@@ -186,7 +186,7 @@ Workspace Rail:
 
 Shortcut Overlay:
 
-- opened with `Ctrl+Option+Command+/`
+- opened with `Ctrl+Shift+/`
 - lists fixed workspace shortcuts
 - does not execute commands
 - is distinct from the deferred Command Palette
@@ -222,8 +222,8 @@ V1 is successful when a user can:
 - launch one native macOS app window
 - use a dynamic Workspace Stack with one Empty Workspace at the bottom
 - create Terminal and Browser Windows
-- navigate focus with `Ctrl+Option+Arrow`
-- move and transfer Columns with `Ctrl+Option+Command+Arrow`
+- navigate focus with `Ctrl+Shift+Arrow`
+- move and transfer Columns with `Ctrl+Shift+Command+Arrow`
 - rotate Column Width Mode
 - use a minimal Workspace Rail
 - use a static Shortcut Overlay

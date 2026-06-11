@@ -59,10 +59,10 @@ The placement of a newly created window. In v1, new windows are inserted in a co
 The window that receives workspace-level actions and normal embedded input. Niritty reserves a small set of workspace shortcuts that take precedence over terminal or browser input.
 
 **Workspace Shortcut**:
-A keyboard shortcut reserved for workspace-level commands. In v1, workspace shortcuts use fixed defaults built around `Ctrl+Option`, with configurable keybindings deferred.
+A keyboard shortcut reserved for workspace-level commands. In v1, workspace shortcuts use fixed defaults built around `Ctrl+Shift`, adding `Command` for Column Movement and Column Transfer, with configurable keybindings deferred.
 
 **Shortcut Overlay**:
-A static help overlay listing the current workspace shortcuts. In v1, it is opened with `Ctrl+Option+Command+/` and does not execute commands.
+A static help overlay listing the current workspace shortcuts. In v1, it is opened with `Ctrl+Shift+/` and does not execute commands.
 
 **Command Palette**:
 A future searchable command execution surface.
