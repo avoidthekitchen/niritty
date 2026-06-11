@@ -35,51 +35,42 @@ struct NirittyApp: App {
                 Button("Focus Left") {
                     workspaceStack.moveFocus(.left, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift])
 
                 Button("Focus Right") {
                     workspaceStack.moveFocus(.right, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift])
 
                 Button("Focus Up") {
                     workspaceStack.moveFocus(.up, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.upArrow, modifiers: [.control, .shift])
 
                 Button("Focus Down") {
                     workspaceStack.moveFocus(.down, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.downArrow, modifiers: [.control, .shift])
 
                 Divider()
 
                 Button("Move Column Left") {
                     workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift, .command])
 
                 Button("Move Column Right") {
                     workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Up") {
                     workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.upArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Down") {
                     workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.downArrow, modifiers: [.control, .shift, .command])
 
                 Divider()
 
                 Button("Shortcut Overlay") {
                     isShortcutOverlayPresented = true
                 }
-                .keyboardShortcut("/", modifiers: [.control, .shift])
             }
         }
     }
