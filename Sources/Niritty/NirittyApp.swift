@@ -8,7 +8,6 @@ import WebKit
 private enum NirittyTelemetry {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "app.niritty.Niritty"
 
-    static let shortcuts = Logger(subsystem: subsystem, category: "Shortcuts")
     static let workspace = Logger(subsystem: subsystem, category: "Workspace")
 }
 
@@ -41,46 +40,63 @@ struct NirittyApp: App {
         .commands {
             CommandMenu("Workspace") {
                 Button("Focus Left") {
-                    workspaceStack.moveFocus(.left, visibleColumnCount: 2)
+                    performWorkspaceCommand(.focusLeft)
                 }
+                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift])
 
                 Button("Focus Right") {
-                    workspaceStack.moveFocus(.right, visibleColumnCount: 2)
+                    performWorkspaceCommand(.focusRight)
                 }
+                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift])
 
                 Button("Focus Up") {
-                    workspaceStack.moveFocus(.up, visibleColumnCount: 2)
+                    performWorkspaceCommand(.focusUp)
                 }
+                .keyboardShortcut(.upArrow, modifiers: [.control, .shift])
 
                 Button("Focus Down") {
-                    workspaceStack.moveFocus(.down, visibleColumnCount: 2)
+                    performWorkspaceCommand(.focusDown)
                 }
+                .keyboardShortcut(.downArrow, modifiers: [.control, .shift])
 
                 Divider()
 
                 Button("Move Column Left") {
-                    workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
+                    performWorkspaceCommand(.moveColumnLeft)
                 }
+                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift, .command])
 
                 Button("Move Column Right") {
-                    workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
+                    performWorkspaceCommand(.moveColumnRight)
                 }
+                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Up") {
-                    workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
+                    performWorkspaceCommand(.transferColumnUp)
                 }
+                .keyboardShortcut(.upArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Down") {
-                    workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
+                    performWorkspaceCommand(.transferColumnDown)
                 }
+                .keyboardShortcut(.downArrow, modifiers: [.control, .shift, .command])
 
                 Divider()
 
                 Button("Shortcut Overlay") {
-                    isShortcutOverlayPresented = true
+                    performWorkspaceCommand(.showShortcutOverlay)
                 }
+                .keyboardShortcut("/", modifiers: [.control, .shift])
             }
         }
+    }
+
+    private func performWorkspaceCommand(_ commandID: WorkspaceCommandID) {
+        executeWorkspaceCommand(
+            commandID,
+            workspaceStack: &workspaceStack,
+            isShortcutOverlayPresented: &isShortcutOverlayPresented
+        )
     }
 
     private static func loadWorkspaceStack() -> WorkspaceStack {
@@ -123,8 +139,6 @@ struct AppWindowView: View {
     @Binding var workspaceStack: WorkspaceStack
     let shortcutOverlayModel: ShortcutOverlayModel
     @Binding var isShortcutOverlayPresented: Bool
-
-    @StateObject private var shortcutEventMonitor = WorkspaceShortcutEventMonitor()
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -179,6 +193,9 @@ struct AppWindowView: View {
                         rotateColumnWidth: { windowID in
                             workspaceStack.focusWindow(id: windowID)
                             workspaceStack.rotateFocusedColumnWidth()
+                        },
+                        performWorkspaceCommand: { commandID in
+                            performWorkspaceCommand(commandID)
                         }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -189,14 +206,6 @@ struct AppWindowView: View {
         .padding(24)
         .sheet(isPresented: $isShortcutOverlayPresented) {
             ShortcutOverlayView(model: shortcutOverlayModel)
-        }
-        .onAppear {
-            shortcutEventMonitor.start { commandID in
-                handleWorkspaceShortcut(commandID)
-            }
-        }
-        .onDisappear {
-            shortcutEventMonitor.stop()
         }
     }
 
@@ -212,33 +221,11 @@ struct AppWindowView: View {
         return "\(workspaceCount) \(label) - one Empty Workspace"
     }
 
-    private func handleWorkspaceShortcut(_ commandID: WorkspaceCommandID) {
-        let before = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
-
-        switch commandID {
-        case .focusLeft:
-            workspaceStack.moveFocus(.left, visibleColumnCount: 2)
-        case .focusRight:
-            workspaceStack.moveFocus(.right, visibleColumnCount: 2)
-        case .focusUp:
-            workspaceStack.moveFocus(.up, visibleColumnCount: 2)
-        case .focusDown:
-            workspaceStack.moveFocus(.down, visibleColumnCount: 2)
-        case .moveColumnLeft:
-            workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
-        case .moveColumnRight:
-            workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
-        case .transferColumnUp:
-            workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
-        case .transferColumnDown:
-            workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
-        case .showShortcutOverlay:
-            isShortcutOverlayPresented = true
-        }
-
-        let after = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
-        NirittyTelemetry.workspace.info(
-            "Workspace command \(commandID.telemetryName, privacy: .public): before=\(before.description, privacy: .public) after=\(after.description, privacy: .public)"
+    private func performWorkspaceCommand(_ commandID: WorkspaceCommandID) {
+        executeWorkspaceCommand(
+            commandID,
+            workspaceStack: &workspaceStack,
+            isShortcutOverlayPresented: &isShortcutOverlayPresented
         )
     }
 }
@@ -270,119 +257,65 @@ private struct WorkspaceFocusTelemetryState {
     }
 }
 
-private final class WorkspaceShortcutEventMonitor: ObservableObject {
-    private static let duplicateDispatchInterval: TimeInterval = 0.25
+private func executeWorkspaceCommand(
+    _ commandID: WorkspaceCommandID,
+    workspaceStack: inout WorkspaceStack,
+    isShortcutOverlayPresented: inout Bool
+) {
+    let before = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
 
-    private var monitor: Any?
-    private var handler: ((WorkspaceCommandID) -> Void)?
-    private var pressedShortcutIdentities = Set<String>()
-    private var lastDispatchTimeByIdentity: [String: TimeInterval] = [:]
-
-    func start(handler: @escaping (WorkspaceCommandID) -> Void) {
-        self.handler = handler
-
-        guard monitor == nil else {
-            NirittyTelemetry.shortcuts.debug("Shortcut monitor start skipped because it is already active")
-            return
-        }
-
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
-            self?.handle(event) ?? event
-        }
-        NirittyTelemetry.shortcuts.info("Shortcut monitor started")
+    switch commandID {
+    case .focusLeft:
+        workspaceStack.moveFocus(.left, visibleColumnCount: 2)
+    case .focusRight:
+        workspaceStack.moveFocus(.right, visibleColumnCount: 2)
+    case .focusUp:
+        workspaceStack.moveFocus(.up, visibleColumnCount: 2)
+    case .focusDown:
+        workspaceStack.moveFocus(.down, visibleColumnCount: 2)
+    case .moveColumnLeft:
+        workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
+    case .moveColumnRight:
+        workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
+    case .transferColumnUp:
+        workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
+    case .transferColumnDown:
+        workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
+    case .showShortcutOverlay:
+        isShortcutOverlayPresented = true
     }
 
-    func stop() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-            NirittyTelemetry.shortcuts.info("Shortcut monitor stopped")
-        }
-
-        monitor = nil
-        handler = nil
-        pressedShortcutIdentities.removeAll()
-        lastDispatchTimeByIdentity.removeAll()
-    }
-
-    deinit {
-        stop()
-    }
-
-    private func handle(_ event: NSEvent) -> NSEvent? {
-        guard let shortcut = WorkspaceReservedShortcut.recognize(event) else {
-            return event
-        }
-
-        if event.type == .keyUp {
-            pressedShortcutIdentities.remove(shortcut.identity)
-            NirittyTelemetry.shortcuts.debug(
-                "Shortcut keyUp consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
-            )
-            return nil
-        }
-
-        guard event.type == .keyDown,
-              !event.isARepeat else {
-            NirittyTelemetry.shortcuts.debug(
-                "Shortcut event consumed without dispatch command=\(shortcut.commandID.telemetryName, privacy: .public) type=\(event.type.telemetryName, privacy: .public) repeat=\(event.isARepeat, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
-            )
-            return nil
-        }
-
-        guard !pressedShortcutIdentities.contains(shortcut.identity) else {
-            NirittyTelemetry.shortcuts.info(
-                "Duplicate shortcut keyDown consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
-            )
-            return nil
-        }
-
-        if let lastDispatchTime = lastDispatchTimeByIdentity[shortcut.identity],
-           event.timestamp - lastDispatchTime < Self.duplicateDispatchInterval {
-            NirittyTelemetry.shortcuts.info(
-                "Rapid duplicate shortcut dispatch consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public) interval=\(event.timestamp - lastDispatchTime, privacy: .public)"
-            )
-            return nil
-        }
-
-        pressedShortcutIdentities.insert(shortcut.identity)
-        lastDispatchTimeByIdentity[shortcut.identity] = event.timestamp
-        NirittyTelemetry.shortcuts.info(
-            "Shortcut dispatched command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) modifiers=\(shortcut.modifierDescription, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
-        )
-        handler?(shortcut.commandID)
-        return nil
-    }
+    let after = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
+    NirittyTelemetry.workspace.info(
+        "Workspace command \(commandID.telemetryName, privacy: .public): before=\(before.description, privacy: .public) after=\(after.description, privacy: .public)"
+    )
 }
 
 private enum WorkspaceReservedShortcut {
-    struct RecognizedShortcut {
-        let commandID: WorkspaceCommandID
-        let identity: String
-        let modifierDescription: String
-    }
-
     private static let workspaceModifierFlags: NSEvent.ModifierFlags = [.control, .shift]
     private static let movementModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command]
     private static let comparedModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command, .option]
 
-    static func recognize(_ event: NSEvent) -> RecognizedShortcut? {
+    static func commandID(for event: NSEvent) -> WorkspaceCommandID? {
+        guard event.type == .keyDown else {
+            return nil
+        }
+
         let modifiers = event.modifierFlags.intersection(comparedModifierFlags)
-        let identity = "\(event.keyCode)-\(modifiers.rawValue)"
-        let modifierDescription = modifiers.telemetryDescription
 
         if modifiers == workspaceModifierFlags {
             switch event.keyCode {
             case 123:
-                return RecognizedShortcut(commandID: .focusLeft, identity: identity, modifierDescription: modifierDescription)
+                return .focusLeft
             case 124:
-                return RecognizedShortcut(commandID: .focusRight, identity: identity, modifierDescription: modifierDescription)
+                return .focusRight
             case 126:
-                return RecognizedShortcut(commandID: .focusUp, identity: identity, modifierDescription: modifierDescription)
+                return .focusUp
             case 125:
-                return RecognizedShortcut(commandID: .focusDown, identity: identity, modifierDescription: modifierDescription)
+                return .focusDown
             default:
                 if event.charactersIgnoringModifiers == "/" {
-                    return RecognizedShortcut(commandID: .showShortcutOverlay, identity: identity, modifierDescription: modifierDescription)
+                    return .showShortcutOverlay
                 }
             }
         }
@@ -390,13 +323,13 @@ private enum WorkspaceReservedShortcut {
         if modifiers == movementModifierFlags {
             switch event.keyCode {
             case 123:
-                return RecognizedShortcut(commandID: .moveColumnLeft, identity: identity, modifierDescription: modifierDescription)
+                return .moveColumnLeft
             case 124:
-                return RecognizedShortcut(commandID: .moveColumnRight, identity: identity, modifierDescription: modifierDescription)
+                return .moveColumnRight
             case 126:
-                return RecognizedShortcut(commandID: .transferColumnUp, identity: identity, modifierDescription: modifierDescription)
+                return .transferColumnUp
             case 125:
-                return RecognizedShortcut(commandID: .transferColumnDown, identity: identity, modifierDescription: modifierDescription)
+                return .transferColumnDown
             default:
                 return nil
             }
@@ -409,43 +342,6 @@ private enum WorkspaceReservedShortcut {
 private extension WorkspaceCommandID {
     var telemetryName: String {
         rawValue
-    }
-}
-
-private extension NSEvent.EventType {
-    var telemetryName: String {
-        switch self {
-        case .keyDown:
-            "keyDown"
-        case .keyUp:
-            "keyUp"
-        default:
-            "event-\(rawValue)"
-        }
-    }
-}
-
-private extension NSEvent.ModifierFlags {
-    var telemetryDescription: String {
-        var names: [String] = []
-
-        if contains(.control) {
-            names.append("control")
-        }
-
-        if contains(.shift) {
-            names.append("shift")
-        }
-
-        if contains(.command) {
-            names.append("command")
-        }
-
-        if contains(.option) {
-            names.append("option")
-        }
-
-        return names.joined(separator: "+")
     }
 }
 
@@ -523,6 +419,7 @@ private struct WorkspaceStrip: View {
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -557,7 +454,8 @@ private struct WorkspaceStrip: View {
                                         focusWindow: focusWindow,
                                         closeWindow: closeWindow,
                                         commitBrowserURL: commitBrowserURL,
-                                        rotateColumnWidth: rotateColumnWidth
+                                        rotateColumnWidth: rotateColumnWidth,
+                                        performWorkspaceCommand: performWorkspaceCommand
                                     )
                                     .frame(maxHeight: .infinity)
                                 }
@@ -593,6 +491,7 @@ private struct PlaceholderColumn: View {
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -614,7 +513,8 @@ private struct PlaceholderColumn: View {
                     focusWindow: focusWindow,
                     closeWindow: closeWindow,
                     commitBrowserURL: commitBrowserURL,
-                    rotateColumnWidth: rotateColumnWidth
+                    rotateColumnWidth: rotateColumnWidth,
+                    performWorkspaceCommand: performWorkspaceCommand
                 )
             }
         }
@@ -629,6 +529,7 @@ private struct ColumnWindowCard: View {
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -638,7 +539,8 @@ private struct ColumnWindowCard: View {
                 window: window,
                 commitBrowserURL: { url in
                     commitBrowserURL(url, window.id)
-                }
+                },
+                performWorkspaceCommand: performWorkspaceCommand
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
@@ -690,13 +592,15 @@ private struct ColumnWindowCard: View {
 private struct WindowContent: View {
     let window: WorkspaceWindow
     let commitBrowserURL: (URL) -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     var body: some View {
         switch window.kind {
         case .browser:
             BrowserWindowContent(
                 initialURL: window.restoreMetadata.browserURL ?? URL(string: "about:blank")!,
-                commitBrowserURL: commitBrowserURL
+                commitBrowserURL: commitBrowserURL,
+                performWorkspaceCommand: performWorkspaceCommand
             )
         case .placeholder, .terminal:
             Text("Placeholder Window")
@@ -710,6 +614,7 @@ private struct WindowContent: View {
 private struct BrowserWindowContent: View {
     let initialURL: URL
     let commitBrowserURL: (URL) -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     @State private var addressText: String
     @State private var canGoBack = false
@@ -718,13 +623,19 @@ private struct BrowserWindowContent: View {
 
     @StateObject private var browserController: BrowserWindowController
 
-    init(initialURL: URL, commitBrowserURL: @escaping (URL) -> Void) {
+    init(
+        initialURL: URL,
+        commitBrowserURL: @escaping (URL) -> Void,
+        performWorkspaceCommand: @escaping (WorkspaceCommandID) -> Void
+    ) {
         self.initialURL = initialURL
         self.commitBrowserURL = commitBrowserURL
+        self.performWorkspaceCommand = performWorkspaceCommand
         _addressText = State(initialValue: initialURL.absoluteString)
         _browserController = StateObject(wrappedValue: BrowserWindowController(
             initialURL: initialURL,
-            commitBrowserURL: commitBrowserURL
+            commitBrowserURL: commitBrowserURL,
+            performWorkspaceCommand: performWorkspaceCommand
         ))
     }
 
@@ -765,6 +676,9 @@ private struct BrowserWindowContent: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            browserController.performWorkspaceCommand = performWorkspaceCommand
+        }
         .onReceive(browserController.$committedURL.compactMap { $0 }) { url in
             addressText = url.absoluteString
         }
@@ -778,30 +692,89 @@ private struct BrowserWebView: NSViewRepresentable {
     let controller: BrowserWindowController
 
     func makeNSView(context: Context) -> WKWebView {
-        controller.webView
+        controller.webView.performWorkspaceCommand = controller.performWorkspaceCommand
+        return controller.webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        guard let workspaceWebView = nsView as? WorkspaceShortcutWebView else {
+            return
+        }
+        workspaceWebView.performWorkspaceCommand = controller.performWorkspaceCommand
+    }
+}
+
+private final class WorkspaceShortcutWebView: WKWebView {
+    var performWorkspaceCommand: ((WorkspaceCommandID) -> Void)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if dispatchWorkspaceShortcut(from: event) {
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if dispatchWorkspaceShortcut(from: event) {
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    override func doCommand(by selector: Selector) {
+        if let event = NSApp.currentEvent,
+           dispatchWorkspaceShortcut(from: event) {
+            return
+        }
+
+        super.doCommand(by: selector)
+    }
+
+    private func dispatchWorkspaceShortcut(from event: NSEvent) -> Bool {
+        guard let commandID = WorkspaceReservedShortcut.commandID(for: event),
+              let performWorkspaceCommand else {
+            return false
+        }
+
+        if !event.isARepeat {
+            performWorkspaceCommand(commandID)
+        }
+
+        return true
+    }
 }
 
 @MainActor
 private final class BrowserWindowController: NSObject, ObservableObject, WKNavigationDelegate {
     static let sharedWebsiteDataStore = WKWebsiteDataStore.default()
 
-    let webView: WKWebView
+    let webView: WorkspaceShortcutWebView
     private let commitBrowserURL: (URL) -> Void
+    var performWorkspaceCommand: (WorkspaceCommandID) -> Void {
+        didSet {
+            webView.performWorkspaceCommand = performWorkspaceCommand
+        }
+    }
 
     @Published var committedURL: URL?
     @Published var canGoBack = false
     @Published var canGoForward = false
     @Published var isLoading = false
 
-    init(initialURL: URL, commitBrowserURL: @escaping (URL) -> Void) {
+    init(
+        initialURL: URL,
+        commitBrowserURL: @escaping (URL) -> Void,
+        performWorkspaceCommand: @escaping (WorkspaceCommandID) -> Void
+    ) {
         self.commitBrowserURL = commitBrowserURL
+        self.performWorkspaceCommand = performWorkspaceCommand
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = Self.sharedWebsiteDataStore
-        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView = WorkspaceShortcutWebView(frame: .zero, configuration: configuration)
+        webView.performWorkspaceCommand = performWorkspaceCommand
 
         super.init()
 

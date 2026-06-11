@@ -82,7 +82,7 @@ V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 
 ## Runtime Telemetry
 
-Niritty emits lightweight unified logs for workspace shortcut routing and focus transitions. To run the app with a live telemetry stream:
+Niritty emits lightweight unified logs for workspace command transitions. To run the app with a live telemetry stream:
 
 ```sh
 ./script/build_and_run.sh --telemetry
@@ -90,7 +90,6 @@ Niritty emits lightweight unified logs for workspace shortcut routing and focus 
 
 Useful categories:
 
-- `Shortcuts`: reserved key recognition, dispatch, duplicate suppression, and key-up consumption.
 - `Workspace`: before/after focused workspace and column state for workspace commands.
 
 See [docs/prd-v1.md](docs/prd-v1.md) for the v1 product requirements draft.
