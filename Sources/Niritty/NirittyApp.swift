@@ -271,9 +271,12 @@ private struct WorkspaceFocusTelemetryState {
 }
 
 private final class WorkspaceShortcutEventMonitor: ObservableObject {
+    private static let duplicateDispatchInterval: TimeInterval = 0.25
+
     private var monitor: Any?
     private var handler: ((WorkspaceCommandID) -> Void)?
     private var pressedShortcutIdentities = Set<String>()
+    private var lastDispatchTimeByIdentity: [String: TimeInterval] = [:]
 
     func start(handler: @escaping (WorkspaceCommandID) -> Void) {
         self.handler = handler
@@ -298,6 +301,7 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
         monitor = nil
         handler = nil
         pressedShortcutIdentities.removeAll()
+        lastDispatchTimeByIdentity.removeAll()
     }
 
     deinit {
@@ -332,7 +336,16 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
             return nil
         }
 
+        if let lastDispatchTime = lastDispatchTimeByIdentity[shortcut.identity],
+           event.timestamp - lastDispatchTime < Self.duplicateDispatchInterval {
+            NirittyTelemetry.shortcuts.info(
+                "Rapid duplicate shortcut dispatch consumed command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) identity=\(shortcut.identity, privacy: .public) interval=\(event.timestamp - lastDispatchTime, privacy: .public)"
+            )
+            return nil
+        }
+
         pressedShortcutIdentities.insert(shortcut.identity)
+        lastDispatchTimeByIdentity[shortcut.identity] = event.timestamp
         NirittyTelemetry.shortcuts.info(
             "Shortcut dispatched command=\(shortcut.commandID.telemetryName, privacy: .public) keyCode=\(event.keyCode, privacy: .public) modifiers=\(shortcut.modifierDescription, privacy: .public) identity=\(shortcut.identity, privacy: .public)"
         )
