@@ -219,6 +219,16 @@ final class WorkspaceStackTests: XCTestCase {
         XCTAssertEqual(stack.workspaces[0].horizontalScrollPosition, 0)
     }
 
+    func testHorizontalScrollPositionCanBeUpdatedFromViewState() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createWindow(kind: .terminal)
+        let workspaceID = stack.workspaces[0].id
+
+        stack.setHorizontalScrollPosition(3, for: workspaceID)
+
+        XCTAssertEqual(stack.workspaces[0].horizontalScrollPosition, 3)
+    }
+
     func testColumnMovementReordersFocusedColumnAndFocusFollowsIt() {
         var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
         stack.createWindow(kind: .terminal)

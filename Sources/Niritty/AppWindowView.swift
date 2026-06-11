@@ -66,6 +66,12 @@ struct AppWindowView: View {
                         },
                         visibleColumnCountChanged: { visibleColumnCount in
                             self.visibleColumnCount = visibleColumnCount
+                        },
+                        horizontalScrollPositionChanged: { horizontalScrollPosition in
+                            workspaceStack.setHorizontalScrollPosition(
+                                horizontalScrollPosition,
+                                for: focusedWorkspace.element.id
+                            )
                         }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -48,6 +48,9 @@ struct WorkspaceStrip: View {
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
     let visibleColumnCountChanged: (Int) -> Void
+    let horizontalScrollPositionChanged: (Double) -> Void
+
+    @State private var scrollTargetColumnID: Column.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -69,46 +72,58 @@ struct WorkspaceStrip: View {
             GeometryReader { geometryProxy in
                 let visibleColumnCount = visibleColumnCount(for: geometryProxy.size.width)
 
-                ScrollViewReader { horizontalScrollProxy in
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 12) {
-                            if workspace.columns.isEmpty {
-                                EmptyWorkspacePlaceholder()
-                            } else {
-                                ForEach(Array(workspace.columns.enumerated()), id: \.element.id) { columnIndex, column in
-                                    PlaceholderColumn(
-                                        column: column,
-                                        index: columnIndex,
-                                        availableWidth: geometryProxy.size.width,
-                                        focusedWindowID: workspace.focusedWindowID,
-                                        focusWindow: focusWindow,
-                                        closeWindow: closeWindow,
-                                        commitBrowserURL: commitBrowserURL,
-                                        rotateColumnWidth: rotateColumnWidth,
-                                        performWorkspaceCommand: performWorkspaceCommand
-                                    )
-                                    .frame(maxHeight: .infinity)
-                                    .id(column.id)
-                                }
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
+                        if workspace.columns.isEmpty {
+                            EmptyWorkspacePlaceholder()
+                        } else {
+                            ForEach(Array(workspace.columns.enumerated()), id: \.element.id) { columnIndex, column in
+                                PlaceholderColumn(
+                                    column: column,
+                                    index: columnIndex,
+                                    availableWidth: geometryProxy.size.width,
+                                    focusedWindowID: workspace.focusedWindowID,
+                                    focusWindow: focusWindow,
+                                    closeWindow: closeWindow,
+                                    commitBrowserURL: commitBrowserURL,
+                                    rotateColumnWidth: rotateColumnWidth,
+                                    performWorkspaceCommand: performWorkspaceCommand
+                                )
+                                .frame(maxHeight: .infinity)
+                                .id(column.id)
                             }
                         }
-                        .padding(2)
-                        .frame(minHeight: geometryProxy.size.height, alignment: .topLeading)
                     }
-                    .onAppear {
-                        visibleColumnCountChanged(visibleColumnCount)
-                        if let columnID = restoredColumnID {
-                            horizontalScrollProxy.scrollTo(columnID, anchor: .leading)
-                        }
+                    .padding(2)
+                    .frame(minHeight: geometryProxy.size.height, alignment: .topLeading)
+                    .scrollTargetLayout()
+                }
+                .scrollPosition(id: $scrollTargetColumnID, anchor: .leading)
+                .onAppear {
+                    visibleColumnCountChanged(visibleColumnCount)
+                    scrollTargetColumnID = restoredColumnID
+                }
+                .onChange(of: visibleColumnCount) { _, visibleColumnCount in
+                    visibleColumnCountChanged(visibleColumnCount)
+                }
+                .onChange(of: workspace.id) { _, _ in
+                    scrollTargetColumnID = restoredColumnID
+                }
+                .onChange(of: workspace.horizontalScrollPosition) { _, _ in
+                    scrollTargetColumnID = restoredColumnID
+                }
+                .onChange(of: scrollTargetColumnID) { _, columnID in
+                    guard let columnID,
+                          let columnIndex = workspace.columns.firstIndex(where: { $0.id == columnID }) else {
+                        return
                     }
-                    .onChange(of: visibleColumnCount) { _, visibleColumnCount in
-                        visibleColumnCountChanged(visibleColumnCount)
+
+                    let position = Double(columnIndex)
+                    guard position != workspace.horizontalScrollPosition else {
+                        return
                     }
-                    .onChange(of: workspace.horizontalScrollPosition) { _, _ in
-                        if let columnID = restoredColumnID {
-                            horizontalScrollProxy.scrollTo(columnID, anchor: .leading)
-                        }
-                    }
+
+                    horizontalScrollPositionChanged(position)
                 }
             }
             .frame(maxHeight: .infinity)

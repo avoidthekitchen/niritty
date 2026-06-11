@@ -102,6 +102,14 @@ public struct WorkspaceStack: Equatable, Sendable {
         workspaces[location.workspaceIndex].columns[location.columnIndex].windows[location.windowIndex].restoreMetadata.browserURL = url
     }
 
+    public mutating func setHorizontalScrollPosition(_ position: Double, for workspaceID: Workspace.ID) {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+            return
+        }
+
+        workspaces[workspaceIndex].horizontalScrollPosition = position
+    }
+
     public mutating func moveFocus(_ direction: FocusDirection, visibleColumnCount: Int) {
         guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == focusedWorkspaceID }) else {
             return
