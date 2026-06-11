@@ -6,6 +6,7 @@ import WebKit
 
 struct BrowserWindowContent: View {
     let initialURL: URL
+    let focusWindow: () -> Void
     let commitBrowserURL: (URL) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
@@ -18,15 +19,18 @@ struct BrowserWindowContent: View {
 
     init(
         initialURL: URL,
+        focusWindow: @escaping () -> Void,
         commitBrowserURL: @escaping (URL) -> Void,
         performWorkspaceCommand: @escaping (WorkspaceCommandID) -> Void
     ) {
         self.initialURL = initialURL
+        self.focusWindow = focusWindow
         self.commitBrowserURL = commitBrowserURL
         self.performWorkspaceCommand = performWorkspaceCommand
         _addressText = State(initialValue: initialURL.absoluteString)
         _browserController = StateObject(wrappedValue: BrowserWindowController(
             initialURL: initialURL,
+            focusWindow: focusWindow,
             commitBrowserURL: commitBrowserURL,
             performWorkspaceCommand: performWorkspaceCommand
         ))
@@ -36,16 +40,19 @@ struct BrowserWindowContent: View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
                 Button("Back") {
+                    focusWindow()
                     browserController.goBack()
                 }
                 .disabled(!canGoBack)
 
                 Button("Forward") {
+                    focusWindow()
                     browserController.goForward()
                 }
                 .disabled(!canGoForward)
 
                 Button(isLoading ? "Stop" : "Reload") {
+                    focusWindow()
                     if isLoading {
                         browserController.stopLoading()
                     } else {
@@ -55,7 +62,11 @@ struct BrowserWindowContent: View {
 
                 TextField("Address", text: $addressText)
                     .textFieldStyle(.roundedBorder)
+                    .onTapGesture {
+                        focusWindow()
+                    }
                     .onSubmit {
+                        focusWindow()
                         guard let url = BrowserWindowController.normalizedURL(from: addressText) else {
                             return
                         }
@@ -70,6 +81,7 @@ struct BrowserWindowContent: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            browserController.focusWindow = focusWindow
             browserController.performWorkspaceCommand = performWorkspaceCommand
         }
         .onReceive(browserController.$committedURL.compactMap { $0 }) { url in
@@ -85,6 +97,7 @@ private struct BrowserWebView: NSViewRepresentable {
     let controller: BrowserWindowController
 
     func makeNSView(context: Context) -> WKWebView {
+        controller.webView.focusWindow = controller.focusWindow
         controller.webView.performWorkspaceCommand = controller.performWorkspaceCommand
         return controller.webView
     }
@@ -93,11 +106,13 @@ private struct BrowserWebView: NSViewRepresentable {
         guard let workspaceWebView = nsView as? WorkspaceShortcutWebView else {
             return
         }
+        workspaceWebView.focusWindow = controller.focusWindow
         workspaceWebView.performWorkspaceCommand = controller.performWorkspaceCommand
     }
 }
 
 private final class WorkspaceShortcutWebView: WKWebView {
+    var focusWindow: (() -> Void)?
     var performWorkspaceCommand: ((WorkspaceCommandID) -> Void)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -109,11 +124,28 @@ private final class WorkspaceShortcutWebView: WKWebView {
     }
 
     override func keyDown(with event: NSEvent) {
+        focusWindow?()
+
         if dispatchWorkspaceShortcut(from: event) {
             return
         }
 
         super.keyDown(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        focusWindow?()
+        super.mouseDown(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        focusWindow?()
+        super.rightMouseDown(with: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        focusWindow?()
+        super.otherMouseDown(with: event)
     }
 
     override func doCommand(by selector: Selector) {
@@ -131,6 +163,8 @@ private final class WorkspaceShortcutWebView: WKWebView {
             return false
         }
 
+        focusWindow?()
+
         if !event.isARepeat {
             performWorkspaceCommand(commandID)
         }
@@ -145,6 +179,11 @@ private final class BrowserWindowController: NSObject, ObservableObject, WKNavig
 
     let webView: WorkspaceShortcutWebView
     private let commitBrowserURL: (URL) -> Void
+    var focusWindow: () -> Void {
+        didSet {
+            webView.focusWindow = focusWindow
+        }
+    }
     var performWorkspaceCommand: (WorkspaceCommandID) -> Void {
         didSet {
             webView.performWorkspaceCommand = performWorkspaceCommand
@@ -158,15 +197,18 @@ private final class BrowserWindowController: NSObject, ObservableObject, WKNavig
 
     init(
         initialURL: URL,
+        focusWindow: @escaping () -> Void,
         commitBrowserURL: @escaping (URL) -> Void,
         performWorkspaceCommand: @escaping (WorkspaceCommandID) -> Void
     ) {
         self.commitBrowserURL = commitBrowserURL
+        self.focusWindow = focusWindow
         self.performWorkspaceCommand = performWorkspaceCommand
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = Self.sharedWebsiteDataStore
         webView = WorkspaceShortcutWebView(frame: .zero, configuration: configuration)
+        webView.focusWindow = focusWindow
         webView.performWorkspaceCommand = performWorkspaceCommand
 
         super.init()

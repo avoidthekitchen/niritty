@@ -211,6 +211,9 @@ private struct ColumnWindowCard: View {
 
             WindowContent(
                 window: window,
+                focusWindow: {
+                    focusWindow(window.id)
+                },
                 commitBrowserURL: { url in
                     commitBrowserURL(url, window.id)
                 },
@@ -265,6 +268,7 @@ private struct ColumnWindowCard: View {
 
 private struct WindowContent: View {
     let window: WorkspaceWindow
+    let focusWindow: () -> Void
     let commitBrowserURL: (URL) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
@@ -273,6 +277,7 @@ private struct WindowContent: View {
         case .browser:
             BrowserWindowContent(
                 initialURL: window.restoreMetadata.browserURL ?? URL(string: "about:blank")!,
+                focusWindow: focusWindow,
                 commitBrowserURL: commitBrowserURL,
                 performWorkspaceCommand: performWorkspaceCommand
             )
