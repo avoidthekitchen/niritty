@@ -256,23 +256,23 @@ final class WorkspaceStackTests: XCTestCase {
     func testWorkspaceCommandRegistryContainsFixedV1Shortcuts() {
         let commands = WorkspaceCommandRegistry.v1.commands
 
-        XCTAssertEqual(commands.first(where: { $0.id == .focusLeft })?.shortcut.displayText, "Ctrl+Option+Left")
-        XCTAssertEqual(commands.first(where: { $0.id == .focusRight })?.shortcut.displayText, "Ctrl+Option+Right")
-        XCTAssertEqual(commands.first(where: { $0.id == .focusUp })?.shortcut.displayText, "Ctrl+Option+Up")
-        XCTAssertEqual(commands.first(where: { $0.id == .focusDown })?.shortcut.displayText, "Ctrl+Option+Down")
-        XCTAssertEqual(commands.first(where: { $0.id == .moveColumnLeft })?.shortcut.displayText, "Ctrl+Option+Command+Left")
-        XCTAssertEqual(commands.first(where: { $0.id == .moveColumnRight })?.shortcut.displayText, "Ctrl+Option+Command+Right")
-        XCTAssertEqual(commands.first(where: { $0.id == .transferColumnUp })?.shortcut.displayText, "Ctrl+Option+Command+Up")
-        XCTAssertEqual(commands.first(where: { $0.id == .transferColumnDown })?.shortcut.displayText, "Ctrl+Option+Command+Down")
-        XCTAssertEqual(commands.first(where: { $0.id == .showShortcutOverlay })?.shortcut.displayText, "Ctrl+Option+Command+/")
+        XCTAssertEqual(commands.first(where: { $0.id == .focusLeft })?.shortcut.displayText, "Ctrl+Shift+Left")
+        XCTAssertEqual(commands.first(where: { $0.id == .focusRight })?.shortcut.displayText, "Ctrl+Shift+Right")
+        XCTAssertEqual(commands.first(where: { $0.id == .focusUp })?.shortcut.displayText, "Ctrl+Shift+Up")
+        XCTAssertEqual(commands.first(where: { $0.id == .focusDown })?.shortcut.displayText, "Ctrl+Shift+Down")
+        XCTAssertEqual(commands.first(where: { $0.id == .moveColumnLeft })?.shortcut.displayText, "Ctrl+Shift+Command+Left")
+        XCTAssertEqual(commands.first(where: { $0.id == .moveColumnRight })?.shortcut.displayText, "Ctrl+Shift+Command+Right")
+        XCTAssertEqual(commands.first(where: { $0.id == .transferColumnUp })?.shortcut.displayText, "Ctrl+Shift+Command+Up")
+        XCTAssertEqual(commands.first(where: { $0.id == .transferColumnDown })?.shortcut.displayText, "Ctrl+Shift+Command+Down")
+        XCTAssertEqual(commands.first(where: { $0.id == .showShortcutOverlay })?.shortcut.displayText, "Ctrl+Shift+/")
     }
 
     func testShortcutOverlayRowsAreGeneratedFromCommandRegistry() {
         let rows = ShortcutOverlayModel(registry: .v1).rows
 
-        XCTAssertTrue(rows.contains(.init(commandTitle: "Focus Left", shortcutText: "Ctrl+Option+Left")))
-        XCTAssertTrue(rows.contains(.init(commandTitle: "Transfer Column Down", shortcutText: "Ctrl+Option+Command+Down")))
-        XCTAssertTrue(rows.contains(.init(commandTitle: "Shortcut Overlay", shortcutText: "Ctrl+Option+Command+/")))
+        XCTAssertTrue(rows.contains(.init(commandTitle: "Focus Left", shortcutText: "Ctrl+Shift+Left")))
+        XCTAssertTrue(rows.contains(.init(commandTitle: "Transfer Column Down", shortcutText: "Ctrl+Shift+Command+Down")))
+        XCTAssertTrue(rows.contains(.init(commandTitle: "Shortcut Overlay", shortcutText: "Ctrl+Shift+/")))
     }
 
     func testPersistenceSnapshotRestoresNonEmptyWorkspacesAndRecreatesBottomEmptyWorkspace() throws {

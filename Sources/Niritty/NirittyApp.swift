@@ -35,51 +35,51 @@ struct NirittyApp: App {
                 Button("Focus Left") {
                     workspaceStack.moveFocus(.left, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [.control, .option])
+                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift])
 
                 Button("Focus Right") {
                     workspaceStack.moveFocus(.right, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [.control, .option])
+                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift])
 
                 Button("Focus Up") {
                     workspaceStack.moveFocus(.up, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.upArrow, modifiers: [.control, .option])
+                .keyboardShortcut(.upArrow, modifiers: [.control, .shift])
 
                 Button("Focus Down") {
                     workspaceStack.moveFocus(.down, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.downArrow, modifiers: [.control, .option])
+                .keyboardShortcut(.downArrow, modifiers: [.control, .shift])
 
                 Divider()
 
                 Button("Move Column Left") {
                     workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [.control, .option, .command])
+                .keyboardShortcut(.leftArrow, modifiers: [.control, .shift, .command])
 
                 Button("Move Column Right") {
                     workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [.control, .option, .command])
+                .keyboardShortcut(.rightArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Up") {
                     workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.upArrow, modifiers: [.control, .option, .command])
+                .keyboardShortcut(.upArrow, modifiers: [.control, .shift, .command])
 
                 Button("Transfer Column Down") {
                     workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
                 }
-                .keyboardShortcut(.downArrow, modifiers: [.control, .option, .command])
+                .keyboardShortcut(.downArrow, modifiers: [.control, .shift, .command])
 
                 Divider()
 
                 Button("Shortcut Overlay") {
                     isShortcutOverlayPresented = true
                 }
-                .keyboardShortcut("/", modifiers: [.control, .option, .command])
+                .keyboardShortcut("/", modifiers: [.control, .shift])
             }
         }
     }
@@ -162,45 +162,38 @@ struct AppWindowView: View {
                     }
                 }
 
-                ScrollViewReader { verticalScrollProxy in
-                    ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(Array(workspaceStack.workspaces.enumerated()), id: \.element.id) { index, workspace in
-                                WorkspaceRow(
-                                    index: index,
-                                    workspace: workspace,
-                                    isFocused: workspace.id == workspaceStack.focusedWorkspaceID,
-                                    focus: {
-                                        workspaceStack.focusWorkspace(id: workspace.id)
-                                    },
-                                    focusWindow: { windowID in
-                                        workspaceStack.focusWindow(id: windowID)
-                                    },
-                                    closeWindow: { windowID in
-                                        workspaceStack.closeWindow(id: windowID)
-                                    },
-                                    commitBrowserURL: { url, windowID in
-                                        workspaceStack.commitBrowserURL(url, for: windowID)
-                                    },
-                                    rotateColumnWidth: { windowID in
-                                        workspaceStack.focusWindow(id: windowID)
-                                        workspaceStack.rotateFocusedColumnWidth()
-                                    }
-                                )
-                                .id(workspace.id)
-                            }
+                if let focusedWorkspace = focusedWorkspace {
+                    WorkspaceStrip(
+                        index: focusedWorkspace.offset,
+                        workspace: focusedWorkspace.element,
+                        focusWindow: { windowID in
+                            workspaceStack.focusWindow(id: windowID)
+                        },
+                        closeWindow: { windowID in
+                            workspaceStack.closeWindow(id: windowID)
+                        },
+                        commitBrowserURL: { url, windowID in
+                            workspaceStack.commitBrowserURL(url, for: windowID)
+                        },
+                        rotateColumnWidth: { windowID in
+                            workspaceStack.focusWindow(id: windowID)
+                            workspaceStack.rotateFocusedColumnWidth()
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .onChange(of: workspaceStack.focusedWorkspaceID) { _, focusedWorkspaceID in
-                        verticalScrollProxy.scrollTo(focusedWorkspaceID)
-                    }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(24)
         .sheet(isPresented: $isShortcutOverlayPresented) {
             ShortcutOverlayView(model: shortcutOverlayModel)
+        }
+    }
+
+    private var focusedWorkspace: EnumeratedSequence<[Workspace]>.Element? {
+        Array(workspaceStack.workspaces.enumerated()).first { _, workspace in
+            workspace.id == workspaceStack.focusedWorkspaceID
         }
     }
 
@@ -278,11 +271,9 @@ private struct WorkspaceRail: View {
     }
 }
 
-private struct WorkspaceRow: View {
+private struct WorkspaceStrip: View {
     let index: Int
     let workspace: Workspace
-    let isFocused: Bool
-    let focus: () -> Void
     let focusWindow: (WorkspaceWindow.ID) -> Void
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
@@ -290,23 +281,20 @@ private struct WorkspaceRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button(action: focus) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(isFocused ? Color.accentColor : Color.secondary.opacity(0.35))
-                        .frame(width: 8, height: 8)
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 8, height: 8)
 
-                    Text("Workspace \(index + 1)")
-                        .font(.headline)
+                Text("Workspace \(index + 1)")
+                    .font(.headline)
 
-                    Text(workspace.isEmptyWorkspace ? "Empty Workspace" : "\(workspace.columns.count) Columns")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                Text(workspace.isEmptyWorkspace ? "Empty Workspace" : "\(workspace.columns.count) Columns")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-                    Spacer()
-                }
+                Spacer()
             }
-            .buttonStyle(.plain)
 
             GeometryReader { geometryProxy in
                 ScrollViewReader { horizontalScrollProxy in
@@ -326,10 +314,17 @@ private struct WorkspaceRow: View {
                                         commitBrowserURL: commitBrowserURL,
                                         rotateColumnWidth: rotateColumnWidth
                                     )
+                                    .frame(maxHeight: .infinity)
                                 }
                             }
                         }
                         .padding(2)
+                        .frame(minHeight: geometryProxy.size.height, alignment: .topLeading)
+                    }
+                    .onAppear {
+                        if let focusedWindowID = workspace.focusedWindowID {
+                            horizontalScrollProxy.scrollTo(focusedWindowID)
+                        }
                     }
                     .onChange(of: workspace.focusedWindowID) { _, focusedWindowID in
                         if let focusedWindowID {
@@ -338,17 +333,9 @@ private struct WorkspaceRow: View {
                     }
                 }
             }
-            .frame(height: 174)
+            .frame(maxHeight: .infinity)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isFocused ? Color.accentColor.opacity(0.12) : Color(NSColor.controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isFocused ? Color.accentColor.opacity(0.55) : Color.secondary.opacity(0.18), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -364,7 +351,7 @@ private struct PlaceholderColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 6) {
                 Text("Column \(index + 1)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -375,55 +362,82 @@ private struct PlaceholderColumn: View {
             }
 
             ForEach(column.windows) { window in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Button(action: { focusWindow(window.id) }) {
-                            Text(window.kind.title)
-                                .font(.headline)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        if window.id == focusedWindowID {
-                            Text("Focused")
-                                .font(.caption)
-                                .foregroundStyle(.tint)
-                        }
-
-                        Button("Close") {
-                            closeWindow(window.id)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-
-                    WindowContent(
-                        window: window,
-                        commitBrowserURL: { url in
-                            commitBrowserURL(url, window.id)
-                        }
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    HStack {
-                        Spacer()
-
-                        Button("Width") {
-                            rotateColumnWidth(window.id)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-                .padding(12)
-                .frame(width: max(220, availableWidth * column.widthMode.widthFraction), height: window.kind == .browser ? 360 : 140, alignment: .topLeading)
-                .background(Color(NSColor.textBackgroundColor))
-                .id(window.id)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(window.id == focusedWindowID ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: 1)
+                ColumnWindowCard(
+                    window: window,
+                    isFocused: window.id == focusedWindowID,
+                    width: max(280, availableWidth * column.widthMode.widthFraction),
+                    focusWindow: focusWindow,
+                    closeWindow: closeWindow,
+                    commitBrowserURL: commitBrowserURL,
+                    rotateColumnWidth: rotateColumnWidth
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+        }
+    }
+}
+
+private struct ColumnWindowCard: View {
+    let window: WorkspaceWindow
+    let isFocused: Bool
+    let width: Double
+    let focusWindow: (WorkspaceWindow.ID) -> Void
+    let closeWindow: (WorkspaceWindow.ID) -> Void
+    let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
+    let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            windowHeader
+
+            WindowContent(
+                window: window,
+                commitBrowserURL: { url in
+                    commitBrowserURL(url, window.id)
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            HStack {
+                Spacer()
+
+                Button("Width") {
+                    rotateColumnWidth(window.id)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(12)
+        .frame(width: width, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.textBackgroundColor))
+        .id(window.id)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isFocused ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var windowHeader: some View {
+        HStack {
+            Button(action: { focusWindow(window.id) }) {
+                Text(window.kind.title)
+                    .font(.headline)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if isFocused {
+                Text("Focused")
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+            }
+
+            Button("Close") {
+                closeWindow(window.id)
+            }
+            .buttonStyle(.borderless)
         }
     }
 }
@@ -443,6 +457,7 @@ private struct WindowContent: View {
             Text("Placeholder Window")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 }
@@ -501,9 +516,10 @@ private struct BrowserWindowContent: View {
             }
 
             BrowserWebView(controller: browserController)
-                .frame(height: 270)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onReceive(browserController.$committedURL.compactMap { $0 }) { url in
             addressText = url.absoluteString
         }
@@ -635,7 +651,8 @@ private struct EmptyWorkspacePlaceholder: View {
         Text("Empty Workspace")
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            .frame(width: 240, height: 140)
+            .frame(width: 280)
+            .frame(maxHeight: .infinity)
             .background(Color(NSColor.textBackgroundColor).opacity(0.65))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)

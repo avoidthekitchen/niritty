@@ -46,9 +46,9 @@ Niritty v1 should support:
 
 V1 uses fixed workspace shortcuts. Configurable keybindings are deferred, but the command model should be designed so remapping can be added later.
 
-- `Ctrl+Option+Arrow`: move focus
-- `Ctrl+Option+Command+Arrow`: move or transfer the focused column
-- `Ctrl+Option+Command+/`: show the shortcut overlay
+- `Ctrl+Shift+Arrow`: move focus
+- `Ctrl+Shift+Command+Arrow`: move or transfer the focused column
+- `Ctrl+Shift+/`: show the shortcut overlay
 
 ## Deferred Beyond V1
 
