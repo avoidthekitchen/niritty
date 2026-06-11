@@ -67,7 +67,7 @@ struct BrowserWindowContent: View {
                     }
                     .onSubmit {
                         focusWindow()
-                        guard let url = BrowserWindowController.normalizedURL(from: addressText) else {
+                        guard let url = BrowserAddressNormalizer.normalizedURL(from: addressText) else {
                             return
                         }
 
@@ -215,23 +215,6 @@ private final class BrowserWindowController: NSObject, ObservableObject, WKNavig
 
         webView.navigationDelegate = self
         load(initialURL)
-    }
-
-    static func normalizedURL(from addressText: String) -> URL? {
-        let trimmed = addressText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return nil
-        }
-
-        if trimmed == "about:blank" {
-            return URL(string: "about:blank")
-        }
-
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return url
-        }
-
-        return URL(string: "https://\(trimmed)")
     }
 
     func load(_ url: URL) {

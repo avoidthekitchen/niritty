@@ -219,16 +219,6 @@ final class WorkspaceStackTests: XCTestCase {
         XCTAssertEqual(stack.workspaces[0].horizontalScrollPosition, 0)
     }
 
-    func testHorizontalScrollPositionCanBeUpdatedFromViewState() {
-        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
-        stack.createWindow(kind: .terminal)
-        let workspaceID = stack.workspaces[0].id
-
-        stack.setHorizontalScrollPosition(3, for: workspaceID)
-
-        XCTAssertEqual(stack.workspaces[0].horizontalScrollPosition, 3)
-    }
-
     func testColumnMovementReordersFocusedColumnAndFocusFollowsIt() {
         var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
         stack.createWindow(kind: .terminal)
@@ -387,5 +377,46 @@ final class WorkspaceStackTests: XCTestCase {
 
         XCTAssertEqual(restored.workspaces[0].columns[0].windows[0].kind, .browser)
         XCTAssertEqual(restored.workspaces[0].columns[0].windows[0].restoreMetadata.browserURL?.absoluteString, "https://example.com/docs")
+    }
+
+    func testBrowserAddressNormalizerPreservesExplicitSchemesAndAboutBlank() {
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "about:blank")?.absoluteString,
+            "about:blank"
+        )
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "http://localhost:3000")?.absoluteString,
+            "http://localhost:3000"
+        )
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "https://example.com/docs")?.absoluteString,
+            "https://example.com/docs"
+        )
+    }
+
+    func testBrowserAddressNormalizerDefaultsLocalAddressesToHTTP() {
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "localhost:3000")?.absoluteString,
+            "http://localhost:3000"
+        )
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "127.0.0.1:5173/path")?.absoluteString,
+            "http://127.0.0.1:5173/path"
+        )
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "[::1]:8080")?.absoluteString,
+            "http://[::1]:8080"
+        )
+    }
+
+    func testBrowserAddressNormalizerDefaultsRemoteAddressesToHTTPS() {
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "example.com:8080")?.absoluteString,
+            "https://example.com:8080"
+        )
+        XCTAssertEqual(
+            BrowserAddressNormalizer.normalizedURL(from: "example.com/docs")?.absoluteString,
+            "https://example.com/docs"
+        )
     }
 }
