@@ -15,8 +15,11 @@ private enum NirittyTelemetry {
 struct NirittyApp: App {
     private let configuration = NirittyAppConfiguration.default
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var workspaceStack: WorkspaceStack
     @State private var isShortcutOverlayPresented = false
+    @State private var visibleColumnCount = 2
+    @State private var pendingPersistenceTask: Task<Void, Never>?
 
     init() {
         _workspaceStack = State(initialValue: Self.loadWorkspaceStack())
@@ -29,11 +32,17 @@ struct NirittyApp: App {
             AppWindowView(
                 workspaceStack: $workspaceStack,
                 shortcutOverlayModel: ShortcutOverlayModel(registry: .v1),
-                isShortcutOverlayPresented: $isShortcutOverlayPresented
+                isShortcutOverlayPresented: $isShortcutOverlayPresented,
+                visibleColumnCount: $visibleColumnCount
             )
                 .frame(minWidth: 900, minHeight: 560)
                 .onChange(of: workspaceStack) { _, workspaceStack in
-                    Self.saveWorkspaceStack(workspaceStack)
+                    scheduleWorkspaceStackSave(workspaceStack)
+                }
+                .onChange(of: scenePhase) { _, scenePhase in
+                    if scenePhase != .active {
+                        flushWorkspaceStackSave(workspaceStack)
+                    }
                 }
         }
         .windowResizability(.contentMinSize)
@@ -95,8 +104,27 @@ struct NirittyApp: App {
         executeWorkspaceCommand(
             commandID,
             workspaceStack: &workspaceStack,
-            isShortcutOverlayPresented: &isShortcutOverlayPresented
+            isShortcutOverlayPresented: &isShortcutOverlayPresented,
+            visibleColumnCount: visibleColumnCount
         )
+    }
+
+    private func scheduleWorkspaceStackSave(_ workspaceStack: WorkspaceStack) {
+        pendingPersistenceTask?.cancel()
+        pendingPersistenceTask = Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else {
+                return
+            }
+
+            Self.saveWorkspaceStack(workspaceStack)
+        }
+    }
+
+    private func flushWorkspaceStackSave(_ workspaceStack: WorkspaceStack) {
+        pendingPersistenceTask?.cancel()
+        pendingPersistenceTask = nil
+        Self.saveWorkspaceStack(workspaceStack)
     }
 
     private static func loadWorkspaceStack() -> WorkspaceStack {
@@ -139,6 +167,7 @@ struct AppWindowView: View {
     @Binding var workspaceStack: WorkspaceStack
     let shortcutOverlayModel: ShortcutOverlayModel
     @Binding var isShortcutOverlayPresented: Bool
+    @Binding var visibleColumnCount: Int
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -196,6 +225,9 @@ struct AppWindowView: View {
                         },
                         performWorkspaceCommand: { commandID in
                             performWorkspaceCommand(commandID)
+                        },
+                        visibleColumnCountChanged: { visibleColumnCount in
+                            self.visibleColumnCount = visibleColumnCount
                         }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -225,7 +257,8 @@ struct AppWindowView: View {
         executeWorkspaceCommand(
             commandID,
             workspaceStack: &workspaceStack,
-            isShortcutOverlayPresented: &isShortcutOverlayPresented
+            isShortcutOverlayPresented: &isShortcutOverlayPresented,
+            visibleColumnCount: visibleColumnCount
         )
     }
 }
@@ -260,27 +293,28 @@ private struct WorkspaceFocusTelemetryState {
 private func executeWorkspaceCommand(
     _ commandID: WorkspaceCommandID,
     workspaceStack: inout WorkspaceStack,
-    isShortcutOverlayPresented: inout Bool
+    isShortcutOverlayPresented: inout Bool,
+    visibleColumnCount: Int
 ) {
     let before = WorkspaceFocusTelemetryState(workspaceStack: workspaceStack)
 
     switch commandID {
     case .focusLeft:
-        workspaceStack.moveFocus(.left, visibleColumnCount: 2)
+        workspaceStack.moveFocus(.left, visibleColumnCount: visibleColumnCount)
     case .focusRight:
-        workspaceStack.moveFocus(.right, visibleColumnCount: 2)
+        workspaceStack.moveFocus(.right, visibleColumnCount: visibleColumnCount)
     case .focusUp:
-        workspaceStack.moveFocus(.up, visibleColumnCount: 2)
+        workspaceStack.moveFocus(.up, visibleColumnCount: visibleColumnCount)
     case .focusDown:
-        workspaceStack.moveFocus(.down, visibleColumnCount: 2)
+        workspaceStack.moveFocus(.down, visibleColumnCount: visibleColumnCount)
     case .moveColumnLeft:
-        workspaceStack.moveFocusedColumn(.left, visibleColumnCount: 2)
+        workspaceStack.moveFocusedColumn(.left, visibleColumnCount: visibleColumnCount)
     case .moveColumnRight:
-        workspaceStack.moveFocusedColumn(.right, visibleColumnCount: 2)
+        workspaceStack.moveFocusedColumn(.right, visibleColumnCount: visibleColumnCount)
     case .transferColumnUp:
-        workspaceStack.moveFocusedColumn(.up, visibleColumnCount: 2)
+        workspaceStack.moveFocusedColumn(.up, visibleColumnCount: visibleColumnCount)
     case .transferColumnDown:
-        workspaceStack.moveFocusedColumn(.down, visibleColumnCount: 2)
+        workspaceStack.moveFocusedColumn(.down, visibleColumnCount: visibleColumnCount)
     case .showShortcutOverlay:
         isShortcutOverlayPresented = true
     }
@@ -420,6 +454,7 @@ private struct WorkspaceStrip: View {
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
+    let visibleColumnCountChanged: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -439,6 +474,8 @@ private struct WorkspaceStrip: View {
             }
 
             GeometryReader { geometryProxy in
+                let visibleColumnCount = visibleColumnCount(for: geometryProxy.size.width)
+
                 ScrollViewReader { horizontalScrollProxy in
                     ScrollView(.horizontal) {
                         HStack(spacing: 12) {
@@ -458,6 +495,7 @@ private struct WorkspaceStrip: View {
                                         performWorkspaceCommand: performWorkspaceCommand
                                     )
                                     .frame(maxHeight: .infinity)
+                                    .id(column.id)
                                 }
                             }
                         }
@@ -465,13 +503,17 @@ private struct WorkspaceStrip: View {
                         .frame(minHeight: geometryProxy.size.height, alignment: .topLeading)
                     }
                     .onAppear {
-                        if let focusedWindowID = workspace.focusedWindowID {
-                            horizontalScrollProxy.scrollTo(focusedWindowID)
+                        visibleColumnCountChanged(visibleColumnCount)
+                        if let columnID = restoredColumnID {
+                            horizontalScrollProxy.scrollTo(columnID, anchor: .leading)
                         }
                     }
-                    .onChange(of: workspace.focusedWindowID) { _, focusedWindowID in
-                        if let focusedWindowID {
-                            horizontalScrollProxy.scrollTo(focusedWindowID)
+                    .onChange(of: visibleColumnCount) { _, visibleColumnCount in
+                        visibleColumnCountChanged(visibleColumnCount)
+                    }
+                    .onChange(of: workspace.horizontalScrollPosition) { _, _ in
+                        if let columnID = restoredColumnID {
+                            horizontalScrollProxy.scrollTo(columnID, anchor: .leading)
                         }
                     }
                 }
@@ -479,6 +521,45 @@ private struct WorkspaceStrip: View {
             .frame(maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var restoredColumnID: Column.ID? {
+        guard !workspace.columns.isEmpty else {
+            return nil
+        }
+
+        let columnIndex = min(
+            max(Int(workspace.horizontalScrollPosition), workspace.columns.startIndex),
+            workspace.columns.index(before: workspace.columns.endIndex)
+        )
+        return workspace.columns[columnIndex].id
+    }
+
+    private func visibleColumnCount(for availableWidth: Double) -> Int {
+        guard !workspace.columns.isEmpty else {
+            return 1
+        }
+
+        let startIndex = min(
+            max(Int(workspace.horizontalScrollPosition), workspace.columns.startIndex),
+            workspace.columns.index(before: workspace.columns.endIndex)
+        )
+        var occupiedWidth = 0.0
+        var columnCount = 0
+
+        for column in workspace.columns[startIndex...] {
+            let columnWidth = max(280, availableWidth * column.widthMode.widthFraction)
+            let nextOccupiedWidth = occupiedWidth + columnWidth + (columnCount == 0 ? 0 : 12)
+
+            if columnCount > 0 && nextOccupiedWidth > availableWidth {
+                break
+            }
+
+            occupiedWidth = nextOccupiedWidth
+            columnCount += 1
+        }
+
+        return max(columnCount, 1)
     }
 }
 
@@ -602,8 +683,13 @@ private struct WindowContent: View {
                 commitBrowserURL: commitBrowserURL,
                 performWorkspaceCommand: performWorkspaceCommand
             )
-        case .placeholder, .terminal:
+        case .placeholder:
             Text("Placeholder Window")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        case .terminal:
+            Text("Terminal Window (placeholder)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -852,6 +938,11 @@ private final class BrowserWindowController: NSObject, ObservableObject, WKNavig
     }
 
     private func commit(_ url: URL) {
+        guard committedURL != url else {
+            updateNavigationState()
+            return
+        }
+
         committedURL = url
         commitBrowserURL(url)
         updateNavigationState()

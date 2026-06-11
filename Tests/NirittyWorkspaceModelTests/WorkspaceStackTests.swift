@@ -78,6 +78,61 @@ final class WorkspaceStackTests: XCTestCase {
         XCTAssertEqual(stack.workspaces[0].columns[1].windows[0].kind, .terminal)
     }
 
+    func testClosingFocusedWindowInMultiColumnWorkspaceFocusesNextColumn() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createWindow(kind: .terminal)
+        let firstWindowID = stack.workspaces[0].columns[0].windows[0].id
+        stack.createWindow(kind: .browser)
+        let secondWindowID = stack.workspaces[0].columns[1].windows[0].id
+        stack.createWindow(kind: .terminal)
+        let thirdWindowID = stack.workspaces[0].columns[2].windows[0].id
+
+        stack.focusWindow(id: secondWindowID)
+        stack.closeWindow(id: secondWindowID)
+
+        XCTAssertEqual(stack.workspaces[0].columns.map { $0.windows[0].id }, [
+            firstWindowID,
+            thirdWindowID,
+        ])
+        XCTAssertEqual(stack.workspaces[0].focusedWindowID, thirdWindowID)
+        XCTAssertEqual(stack.focusedWorkspaceID, stack.workspaces[0].id)
+    }
+
+    func testClosingLastWindowInFocusedWorkspaceLeavesFocusedEmptyWorkspaceAndBottomEmptyWorkspace() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createWindow(kind: .terminal)
+        let focusedWorkspaceID = stack.workspaces[0].id
+        let windowID = stack.workspaces[0].columns[0].windows[0].id
+
+        stack.closeWindow(id: windowID)
+
+        XCTAssertEqual(stack.workspaces.count, 2)
+        XCTAssertEqual(stack.focusedWorkspaceID, focusedWorkspaceID)
+        XCTAssertEqual(stack.workspaces[0].id, focusedWorkspaceID)
+        XCTAssertTrue(stack.workspaces[0].isEmptyWorkspace)
+        XCTAssertNil(stack.workspaces[0].focusedWindowID)
+        XCTAssertTrue(stack.workspaces[1].isEmptyWorkspace)
+    }
+
+    func testClosingNonFocusedWindowKeepsCurrentFocus() {
+        var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
+        stack.createWindow(kind: .terminal)
+        let firstWindowID = stack.workspaces[0].columns[0].windows[0].id
+        stack.createWindow(kind: .browser)
+        let secondWindowID = stack.workspaces[0].columns[1].windows[0].id
+        stack.createWindow(kind: .terminal)
+        let thirdWindowID = stack.workspaces[0].columns[2].windows[0].id
+
+        stack.focusWindow(id: firstWindowID)
+        stack.closeWindow(id: thirdWindowID)
+
+        XCTAssertEqual(stack.workspaces[0].columns.map { $0.windows[0].id }, [
+            firstWindowID,
+            secondWindowID,
+        ])
+        XCTAssertEqual(stack.workspaces[0].focusedWindowID, firstWindowID)
+    }
+
     func testFocusMovesLeftAndRightAcrossColumnsInCurrentWorkspace() {
         var stack = WorkspaceStack.initial(workspaceRoot: URL(filePath: "/Users/tester/project"))
         stack.createWindow(kind: .terminal)
