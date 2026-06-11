@@ -262,6 +262,10 @@ private final class WorkspaceShortcutEventMonitor: ObservableObject {
             return event
         }
 
+        guard !event.isARepeat else {
+            return nil
+        }
+
         handler?(commandID)
         return nil
     }
