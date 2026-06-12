@@ -9,6 +9,7 @@ public struct GhosttyTerminalView: NSViewRepresentable {
     public let focusWindow: () -> Void
     public let updateCurrentDirectory: (URL) -> Void
     public let markExited: () -> Void
+    // TODO: Route the restart flow through this representable, or remove this stored closure.
     public let restart: () -> Void
     public let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 

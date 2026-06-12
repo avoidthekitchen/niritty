@@ -421,6 +421,29 @@ public struct WindowRestoreMetadata: Codable, Equatable, Sendable {
     public var terminalCurrentDirectory: URL?
     public var isTerminalExited: Bool
 
+    private enum CodingKeys: String, CodingKey {
+        case browserURL
+        case terminalCurrentDirectory
+        case isTerminalExited
+    }
+
+    public init(
+        browserURL: URL?,
+        terminalCurrentDirectory: URL?,
+        isTerminalExited: Bool
+    ) {
+        self.browserURL = browserURL
+        self.terminalCurrentDirectory = terminalCurrentDirectory
+        self.isTerminalExited = isTerminalExited
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        browserURL = try container.decodeIfPresent(URL.self, forKey: .browserURL)
+        terminalCurrentDirectory = try container.decodeIfPresent(URL.self, forKey: .terminalCurrentDirectory)
+        isTerminalExited = try container.decodeIfPresent(Bool.self, forKey: .isTerminalExited) ?? false
+    }
+
     public static let empty = WindowRestoreMetadata(
         browserURL: nil,
         terminalCurrentDirectory: nil,

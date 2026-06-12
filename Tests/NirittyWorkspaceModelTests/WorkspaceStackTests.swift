@@ -451,6 +451,20 @@ final class WorkspaceStackTests: XCTestCase {
         XCTAssertFalse(restored.workspaces[0].columns[0].windows[0].restoreMetadata.isTerminalExited)
     }
 
+    func testLegacyWindowRestoreMetadataDefaultsTerminalExitStateWhenDecoded() throws {
+        let data = """
+        {
+          "browserURL": null,
+          "terminalCurrentDirectory": "file:\\/\\/\\/Users\\/tester\\/project\\/Sources"
+        }
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(WindowRestoreMetadata.self, from: data)
+
+        XCTAssertEqual(metadata.terminalCurrentDirectory?.path(), "/Users/tester/project/Sources")
+        XCTAssertFalse(metadata.isTerminalExited)
+    }
+
     func testBrowserAddressNormalizerPreservesExplicitSchemesAndAboutBlank() {
         XCTAssertEqual(
             BrowserAddressNormalizer.normalizedURL(from: "about:blank")?.absoluteString,

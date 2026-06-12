@@ -4,19 +4,46 @@ import XCTest
 @testable import NirittyGhosttyTerminal
 
 final class TerminalKeyEventEncoderTests: XCTestCase {
-    func testReturnAndDeleteAreSentAsStructuredKeysNotText() {
+    func testReturnIsSentAsStructuredKeyNotText() {
         let returnEvent = keyEvent(keyCode: 36, characters: "\r")
-        let deleteEvent = keyEvent(keyCode: 51, characters: "\u{7F}")
 
         XCTAssertNil(TerminalKeyEventEncoder.text(for: returnEvent))
         XCTAssertEqual(
             TerminalKeyEventEncoder.ghosttyKeyEvent(from: returnEvent, action: GHOSTTY_ACTION_PRESS).keycode,
             36
         )
-        XCTAssertNil(TerminalKeyEventEncoder.text(for: deleteEvent))
+    }
+
+    func testDeleteCarriesBackspaceTextAndStableCodepoint() {
+        let deleteEvent = keyEvent(keyCode: 51, characters: "\u{7F}")
+        let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: deleteEvent, action: GHOSTTY_ACTION_PRESS)
+
+        XCTAssertEqual(TerminalKeyEventEncoder.text(for: deleteEvent), "\u{7F}")
+        XCTAssertEqual(keyEvent.keycode, 51)
+        XCTAssertEqual(keyEvent.unshifted_codepoint, 0x7F)
+    }
+
+    func testSpecialKeysUseStableCodepoints() {
         XCTAssertEqual(
-            TerminalKeyEventEncoder.ghosttyKeyEvent(from: deleteEvent, action: GHOSTTY_ACTION_PRESS).keycode,
-            51
+            TerminalKeyEventEncoder.ghosttyKeyEvent(
+                from: keyEvent(keyCode: 36, characters: "\r"),
+                action: GHOSTTY_ACTION_PRESS
+            ).unshifted_codepoint,
+            0x0D
+        )
+        XCTAssertEqual(
+            TerminalKeyEventEncoder.ghosttyKeyEvent(
+                from: keyEvent(keyCode: 48, characters: "\t"),
+                action: GHOSTTY_ACTION_PRESS
+            ).unshifted_codepoint,
+            0x09
+        )
+        XCTAssertEqual(
+            TerminalKeyEventEncoder.ghosttyKeyEvent(
+                from: keyEvent(keyCode: 53, characters: "\u{1B}"),
+                action: GHOSTTY_ACTION_PRESS
+            ).unshifted_codepoint,
+            0x1B
         )
     }
 
