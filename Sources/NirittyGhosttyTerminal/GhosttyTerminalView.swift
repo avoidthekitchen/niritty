@@ -87,12 +87,15 @@ public final class TerminalSurfaceView: NSView {
     nonisolated(unsafe) fileprivate var surface: ghostty_surface_t?
     private let runtime = GhosttyRuntime.shared
     private var isWorkspaceFocused = false
+    private var workingDirectory: URL?
+    private var initializationErrorView: NSView?
 
     init(
         workingDirectory: URL?,
         coordinator: GhosttyTerminalView.Coordinator?
     ) {
         self.coordinator = coordinator
+        self.workingDirectory = workingDirectory
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         wantsLayer = true
         createSurface(workingDirectory: workingDirectory)
@@ -274,7 +277,9 @@ public final class TerminalSurfaceView: NSView {
     }
 
     private func createSurface(workingDirectory: URL?) {
+        self.workingDirectory = workingDirectory
         guard let app = runtime.app else {
+            showInitializationError(runtime.initializationFailureMessage ?? "Ghostty initialization failed.")
             return
         }
 
@@ -295,6 +300,11 @@ public final class TerminalSurfaceView: NSView {
         }
 
         syncSurfaceSize()
+        if surface == nil {
+            showInitializationError("Ghostty terminal surface failed to initialize.")
+        } else {
+            hideInitializationError()
+        }
     }
 
     private func syncSurfaceSize() {
@@ -373,6 +383,61 @@ public final class TerminalSurfaceView: NSView {
             TerminalKeyEventEncoder.ghosttyMods(from: event.modifierFlags)
         )
     }
+
+    @objc private func retryGhosttyInitialization() {
+        runtime.retryInitialization()
+        createSurface(workingDirectory: workingDirectory)
+    }
+
+    private func showInitializationError(_ message: String) {
+        initializationErrorView?.removeFromSuperview()
+
+        let overlay = NSView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.wantsLayer = true
+        overlay.layer?.backgroundColor = NSColor.black.cgColor
+
+        let title = NSTextField(labelWithString: "Ghostty initialization failed")
+        title.font = .preferredFont(forTextStyle: .headline)
+        title.textColor = .white
+        title.alignment = .center
+
+        let detail = NSTextField(wrappingLabelWithString: message)
+        detail.font = .preferredFont(forTextStyle: .subheadline)
+        detail.textColor = .secondaryLabelColor
+        detail.alignment = .center
+
+        let retryButton = NSButton(title: "Retry", target: self, action: #selector(retryGhosttyInitialization))
+        retryButton.bezelStyle = .rounded
+
+        let stack = NSStackView(views: [title, detail, retryButton])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 10
+
+        overlay.addSubview(stack)
+        addSubview(overlay)
+        initializationErrorView = overlay
+
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            stack.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -24),
+            detail.widthAnchor.constraint(lessThanOrEqualToConstant: 420)
+        ])
+    }
+
+    private func hideInitializationError() {
+        initializationErrorView?.removeFromSuperview()
+        initializationErrorView = nil
+    }
 }
 
 private final class GhosttyRuntime {
@@ -384,17 +449,27 @@ private final class GhosttyRuntime {
 
     nonisolated(unsafe) private var config: ghostty_config_t?
     nonisolated(unsafe) private(set) var app: ghostty_app_t?
+    nonisolated(unsafe) private(set) var initializationFailureMessage: String?
+    nonisolated(unsafe) private var didInitializeGhostty = false
 
     private init() {
+        initialize()
+    }
+
+    private func initialize() {
+        initializationFailureMessage = nil
         configureResourcesDirectory()
-        guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
-            Self.logger.error("Ghostty runtime initialization failed")
-            return
+        if !didInitializeGhostty {
+            guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
+                failInitialization("Ghostty runtime initialization failed")
+                return
+            }
+            didInitializeGhostty = true
         }
 
         let config = ghostty_config_new()
         guard let config else {
-            Self.logger.error("Ghostty config allocation failed")
+            failInitialization("Ghostty config allocation failed")
             return
         }
         ghostty_config_load_default_files(config)
@@ -426,7 +501,7 @@ private final class GhosttyRuntime {
         )
         self.app = ghostty_app_new(&runtimeConfig, config)
         if self.app == nil {
-            Self.logger.error("Ghostty app allocation failed")
+            failInitialization("Ghostty app allocation failed")
         }
     }
 
@@ -437,6 +512,22 @@ private final class GhosttyRuntime {
         if let config {
             ghostty_config_free(config)
         }
+    }
+
+    func retryInitialization() {
+        guard app == nil else { return }
+
+        if let config {
+            ghostty_config_free(config)
+            self.config = nil
+        }
+
+        initialize()
+    }
+
+    private func failInitialization(_ message: String) {
+        initializationFailureMessage = message
+        Self.logger.error("\(message, privacy: .public)")
     }
 
     private func configureResourcesDirectory() {
