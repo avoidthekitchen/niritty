@@ -338,9 +338,13 @@ private final class GhosttyRuntime {
 
     nonisolated private static func wakeup(_ userdata: UnsafeMutableRawPointer?) {
         guard let userdata else { return }
-        let runtime = Unmanaged<GhosttyRuntime>.fromOpaque(userdata).takeUnretainedValue()
-        guard let app = runtime.app else { return }
-        ghostty_app_tick(app)
+        let userdataAddress = UInt(bitPattern: userdata)
+        DispatchQueue.main.async {
+            guard let userdata = UnsafeMutableRawPointer(bitPattern: userdataAddress) else { return }
+            let runtime = Unmanaged<GhosttyRuntime>.fromOpaque(userdata).takeUnretainedValue()
+            guard let app = runtime.app else { return }
+            ghostty_app_tick(app)
+        }
     }
 
     nonisolated private static func handleAction(target: ghostty_target_s, action: ghostty_action_s) -> Bool {

@@ -18,6 +18,7 @@ GHOSTTY_RESOURCES="$ROOT_DIR/Vendor/ghostty/zig-out/share/ghostty"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
+"$ROOT_DIR/script/ensure_ghosttykit.sh"
 swift build
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 

@@ -24,6 +24,7 @@ final class GhosttyDependencyTests: XCTestCase {
         let script = try String(contentsOf: root.appending(path: "script/build_and_run.sh"), encoding: .utf8)
         XCTAssertTrue(script.contains("GHOSTTY_RESOURCES="))
         XCTAssertTrue(script.contains("APP_RESOURCES="))
+        XCTAssertTrue(script.contains("\"$ROOT_DIR/script/ensure_ghosttykit.sh\"\nswift build"))
         XCTAssertTrue(script.contains("cp -R \"$GHOSTTY_RESOURCES\" \"$APP_RESOURCES/ghostty\""))
         XCTAssertTrue(script.contains("Run script/ensure_ghosttykit.sh before packaging Niritty."))
     }
