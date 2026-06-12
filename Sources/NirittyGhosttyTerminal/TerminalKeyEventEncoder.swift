@@ -44,7 +44,7 @@ enum TerminalKeyEventEncoder {
         return text
     }
 
-    private static func ghosttyMods(from flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+    static func ghosttyMods(from flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
         var rawValue: UInt32 = GHOSTTY_MODS_NONE.rawValue
 
         if flags.contains(.shift) {

@@ -6,15 +6,15 @@ APP_RESOURCES="$ROOT_DIR/dist/Niritty.app/Contents/Resources/ghostty"
 RETURN_MARKER="$(mktemp -u /tmp/niritty-return.XXXXXX)"
 DELETE_MARKER="$(mktemp -u /tmp/niritty-delete.XXXXXX)"
 DELETE_MARKER_WITH_SUFFIX="${DELETE_MARKER}x"
+PASTE_MARKER="$(mktemp -u /tmp/niritty-paste.XXXXXX)"
 FOCUS_LEFT_DIR="$(mktemp -d /tmp/niritty-focus-left.XXXXXX)"
 FOCUS_RIGHT_DIR="$(mktemp -d /tmp/niritty-focus-right.XXXXXX)"
 FOCUS_MARKER="niritty-focus-marker"
 
 cd "$ROOT_DIR"
-trap 'pkill -x Niritty >/dev/null 2>&1 || true; rm -f "$RETURN_MARKER" "$DELETE_MARKER" "$DELETE_MARKER_WITH_SUFFIX"; rm -rf "$FOCUS_LEFT_DIR" "$FOCUS_RIGHT_DIR"' EXIT
+trap 'pkill -x Niritty >/dev/null 2>&1 || true; rm -f "$RETURN_MARKER" "$DELETE_MARKER" "$DELETE_MARKER_WITH_SUFFIX" "$PASTE_MARKER"; rm -rf "$FOCUS_LEFT_DIR" "$FOCUS_RIGHT_DIR"' EXIT
 
-script/ensure_ghosttykit.sh
-swift test
+script/test.sh
 script/build_and_run.sh --verify
 
 osascript -e 'tell application "System Events" to tell process "Niritty" to click button 1 of group 1 of window 1'
@@ -50,6 +50,21 @@ fi
 
 if [[ -f "$DELETE_MARKER_WITH_SUFFIX" ]]; then
   echo "Delete key failed; unexpected marker still had its deleted suffix." >&2
+  exit 1
+fi
+
+printf 'touch %s' "$PASTE_MARKER" | pbcopy
+osascript \
+  -e 'tell application "System Events"' \
+  -e 'tell process "Niritty"' \
+  -e 'keystroke "v" using {command down}' \
+  -e 'key code 36' \
+  -e 'delay 1' \
+  -e 'end tell' \
+  -e 'end tell'
+
+if [[ ! -f "$PASTE_MARKER" ]]; then
+  echo "Clipboard paste did not execute a pasted terminal command." >&2
   exit 1
 fi
 

@@ -1,6 +1,7 @@
 import AppKit
 import GhosttyKit
 import NirittyWorkspaceModel
+import OSLog
 import SwiftUI
 
 public struct GhosttyTerminalView: NSViewRepresentable {
@@ -83,7 +84,7 @@ public struct GhosttyTerminalView: NSViewRepresentable {
 public final class TerminalSurfaceView: NSView {
     fileprivate var coordinator: GhosttyTerminalView.Coordinator?
 
-    nonisolated(unsafe) private var surface: ghostty_surface_t?
+    nonisolated(unsafe) fileprivate var surface: ghostty_surface_t?
     private let runtime = GhosttyRuntime.shared
     private var isWorkspaceFocused = false
 
@@ -171,7 +172,74 @@ public final class TerminalSurfaceView: NSView {
     public override func mouseDown(with event: NSEvent) {
         coordinator?.focusWindow()
         setWorkspaceFocus(true)
-        super.mouseDown(with: event)
+        sendMouseButton(event, state: GHOSTTY_MOUSE_PRESS, fallback: {
+            super.mouseDown(with: event)
+        })
+    }
+
+    public override func mouseUp(with event: NSEvent) {
+        sendMouseButton(event, state: GHOSTTY_MOUSE_RELEASE, fallback: {
+            super.mouseUp(with: event)
+        })
+    }
+
+    public override func rightMouseDown(with event: NSEvent) {
+        coordinator?.focusWindow()
+        setWorkspaceFocus(true)
+        sendMouseButton(event, state: GHOSTTY_MOUSE_PRESS, fallback: {
+            super.rightMouseDown(with: event)
+        })
+    }
+
+    public override func rightMouseUp(with event: NSEvent) {
+        sendMouseButton(event, state: GHOSTTY_MOUSE_RELEASE, fallback: {
+            super.rightMouseUp(with: event)
+        })
+    }
+
+    public override func otherMouseDown(with event: NSEvent) {
+        coordinator?.focusWindow()
+        setWorkspaceFocus(true)
+        sendMouseButton(event, state: GHOSTTY_MOUSE_PRESS, fallback: {
+            super.otherMouseDown(with: event)
+        })
+    }
+
+    public override func otherMouseUp(with event: NSEvent) {
+        sendMouseButton(event, state: GHOSTTY_MOUSE_RELEASE, fallback: {
+            super.otherMouseUp(with: event)
+        })
+    }
+
+    public override func mouseMoved(with event: NSEvent) {
+        sendMousePosition(event)
+    }
+
+    public override func mouseDragged(with event: NSEvent) {
+        sendMousePosition(event)
+    }
+
+    public override func rightMouseDragged(with event: NSEvent) {
+        sendMousePosition(event)
+    }
+
+    public override func otherMouseDragged(with event: NSEvent) {
+        sendMousePosition(event)
+    }
+
+    public override func scrollWheel(with event: NSEvent) {
+        guard let surface else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        sendMousePosition(event)
+        ghostty_surface_mouse_scroll(
+            surface,
+            TerminalMouseEventEncoder.scrollX(from: event),
+            TerminalMouseEventEncoder.scrollY(from: event),
+            TerminalMouseEventEncoder.scrollMods(from: event.modifierFlags)
+        )
     }
 
     fileprivate func setWorkspaceFocus(_ focused: Bool) {
@@ -267,10 +335,52 @@ public final class TerminalSurfaceView: NSView {
         }
         needsDisplay = true
     }
+
+    private func sendMouseButton(
+        _ event: NSEvent,
+        state: ghostty_input_mouse_state_e,
+        fallback: () -> Void
+    ) {
+        guard let surface else {
+            fallback()
+            return
+        }
+
+        sendMousePosition(event)
+        let consumed = ghostty_surface_mouse_button(
+            surface,
+            state,
+            TerminalMouseEventEncoder.ghosttyButton(from: event),
+            TerminalKeyEventEncoder.ghosttyMods(from: event.modifierFlags)
+        )
+
+        if !consumed {
+            fallback()
+        }
+    }
+
+    private func sendMousePosition(_ event: NSEvent) {
+        guard let surface else { return }
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let position = TerminalMouseEventEncoder.ghosttyPosition(
+            localPoint: localPoint,
+            bounds: bounds
+        )
+        ghostty_surface_mouse_pos(
+            surface,
+            position.x,
+            position.y,
+            TerminalKeyEventEncoder.ghosttyMods(from: event.modifierFlags)
+        )
+    }
 }
 
 private final class GhosttyRuntime {
     nonisolated(unsafe) static let shared = GhosttyRuntime()
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "app.niritty.Niritty",
+        category: "GhosttyRuntime"
+    )
 
     nonisolated(unsafe) private var config: ghostty_config_t?
     nonisolated(unsafe) private(set) var app: ghostty_app_t?
@@ -278,11 +388,15 @@ private final class GhosttyRuntime {
     private init() {
         configureResourcesDirectory()
         guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
+            Self.logger.error("Ghostty runtime initialization failed")
             return
         }
 
         let config = ghostty_config_new()
-        guard let config else { return }
+        guard let config else {
+            Self.logger.error("Ghostty config allocation failed")
+            return
+        }
         ghostty_config_load_default_files(config)
         ghostty_config_load_recursive_files(config)
         ghostty_config_finalize(config)
@@ -297,20 +411,21 @@ private final class GhosttyRuntime {
             action_cb: { _, target, action in
                 GhosttyRuntime.handleAction(target: target, action: action)
             },
-            read_clipboard_cb: { _, clipboard, state in
-                GhosttyRuntime.readClipboard(clipboard, state: state)
+            read_clipboard_cb: { userdata, clipboard, state in
+                GhosttyRuntime.readClipboard(userdata, clipboard: clipboard, state: state)
             },
             confirm_read_clipboard_cb: { _, _, _, _ in },
             write_clipboard_cb: { _, clipboard, contents, count, _ in
                 GhosttyRuntime.writeClipboard(clipboard, contents: contents, count: count)
             },
-            close_surface_cb: { _, processAlive in
-                if !processAlive {
-                    // Surface-specific child-exit state is also delivered through actions.
-                }
+            close_surface_cb: { userdata, processAlive in
+                GhosttyRuntime.closeSurface(userdata, processAlive: processAlive)
             }
         )
         self.app = ghostty_app_new(&runtimeConfig, config)
+        if self.app == nil {
+            Self.logger.error("Ghostty app allocation failed")
+        }
     }
 
     deinit {
@@ -330,6 +445,7 @@ private final class GhosttyRuntime {
         ].compactMap { $0 }
 
         guard let resourcesURL = resourceCandidates.first(where: { fileManager.fileExists(atPath: $0.path()) }) else {
+            Self.logger.error("Ghostty resources directory was not found")
             return
         }
 
@@ -373,16 +489,37 @@ private final class GhosttyRuntime {
         }
     }
 
-    nonisolated private static func readClipboard(_ clipboard: ghostty_clipboard_e, state: UnsafeMutableRawPointer?) -> Bool {
-        guard clipboard == GHOSTTY_CLIPBOARD_STANDARD,
-              let string = NSPasteboard.general.string(forType: .string) else {
+    nonisolated private static func closeSurface(
+        _ userdata: UnsafeMutableRawPointer?,
+        processAlive: Bool
+    ) {
+        guard !processAlive,
+              let userdata else {
+            return
+        }
+
+        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        DispatchQueue.main.async {
+            view.markHostTerminalExited()
+        }
+    }
+
+    nonisolated private static func readClipboard(
+        _ userdata: UnsafeMutableRawPointer?,
+        clipboard: ghostty_clipboard_e,
+        state: UnsafeMutableRawPointer?
+    ) -> Bool {
+        guard let userdata else {
             return false
         }
 
-        // Minimal MVP: allow paste through normal AppKit text input paths; Ghostty can still ask.
-        _ = string
-        _ = state
-        return false
+        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+        return TerminalClipboardBridge.completeStandardRead(
+            clipboard: clipboard,
+            string: NSPasteboard.general.string(forType: .string),
+            surface: view.surface,
+            state: state
+        )
     }
 
     nonisolated private static func writeClipboard(

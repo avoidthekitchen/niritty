@@ -80,6 +80,23 @@ V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 - Browser engine: `WKWebView`
 - Layout engine: custom Niri-inspired Workspace/Column model
 
+## Development Setup
+
+Ghostty support is experimental and uses a pinned `Vendor/ghostty` submodule plus generated build artifacts. After cloning, initialize the submodule and run the bootstrap script before using raw SwiftPM commands:
+
+```sh
+git submodule update --init --recursive Vendor/ghostty
+./script/bootstrap.sh
+```
+
+Use the project test entrypoint so bootstrap always runs before SwiftPM:
+
+```sh
+./script/test.sh
+```
+
+Raw `swift build` and `swift test` work after bootstrap has produced `GhosttyKit.xcframework` and Ghostty resources. CI should checkout submodules and run `./script/test.sh`.
+
 ## Runtime Telemetry
 
 Niritty emits lightweight unified logs for workspace command transitions. To run the app with a live telemetry stream:

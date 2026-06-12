@@ -18,7 +18,7 @@ GHOSTTY_RESOURCES="$ROOT_DIR/Vendor/ghostty/zig-out/share/ghostty"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-"$ROOT_DIR/script/ensure_ghosttykit.sh"
+"$ROOT_DIR/script/bootstrap.sh"
 swift build
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
@@ -32,7 +32,7 @@ if [[ -d "$GHOSTTY_RESOURCES" ]]; then
   cp -R "$GHOSTTY_RESOURCES" "$APP_RESOURCES/ghostty"
 else
   echo "Missing Ghostty resources at $GHOSTTY_RESOURCES" >&2
-  echo "Run script/ensure_ghosttykit.sh before packaging Niritty." >&2
+  echo "Run script/bootstrap.sh before packaging Niritty." >&2
   exit 1
 fi
 
