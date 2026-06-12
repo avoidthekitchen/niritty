@@ -82,7 +82,9 @@ V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 
 ## Development Setup
 
-Ghostty support is experimental and uses a pinned `Vendor/ghostty` submodule plus generated build artifacts. After cloning, initialize the submodule and run the bootstrap script before using raw SwiftPM commands:
+Ghostty support is experimental and uses a pinned `Vendor/ghostty` submodule plus generated build artifacts. The current GhosttyKit bootstrap is Apple Silicon-only and intentionally validates the generated `macos-arm64` xcframework slice. Intel Macs are not supported yet.
+
+After cloning on an Apple Silicon Mac, initialize the submodule and run the bootstrap script before using raw SwiftPM commands:
 
 ```sh
 git submodule update --init --recursive Vendor/ghostty

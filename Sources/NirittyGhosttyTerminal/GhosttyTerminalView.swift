@@ -414,7 +414,9 @@ private final class GhosttyRuntime {
             read_clipboard_cb: { userdata, clipboard, state in
                 GhosttyRuntime.readClipboard(userdata, clipboard: clipboard, state: state)
             },
-            confirm_read_clipboard_cb: { _, _, _, _ in },
+            confirm_read_clipboard_cb: { userdata, string, state, _ in
+                GhosttyRuntime.confirmReadClipboard(userdata, string: string, state: state)
+            },
             write_clipboard_cb: { _, clipboard, contents, count, _ in
                 GhosttyRuntime.writeClipboard(clipboard, contents: contents, count: count)
             },
@@ -513,13 +515,49 @@ private final class GhosttyRuntime {
             return false
         }
 
-        let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
-        return TerminalClipboardBridge.completeStandardRead(
-            clipboard: clipboard,
-            string: NSPasteboard.general.string(forType: .string),
-            surface: view.surface,
-            state: state
-        )
+        let userdataAddress = UInt(bitPattern: userdata)
+        return performOnMainSync {
+            guard let userdata = UnsafeMutableRawPointer(bitPattern: userdataAddress) else {
+                return false
+            }
+
+            let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+            return TerminalClipboardBridge.completeStandardRead(
+                clipboard: clipboard,
+                string: NSPasteboard.general.string(forType: .string),
+                surface: view.surface,
+                state: state
+            )
+        }
+    }
+
+    nonisolated private static func confirmReadClipboard(
+        _ userdata: UnsafeMutableRawPointer?,
+        string: UnsafePointer<CChar>?,
+        state: UnsafeMutableRawPointer?
+    ) {
+        guard let userdata,
+              let string else {
+            return
+        }
+
+        let userdataAddress = UInt(bitPattern: userdata)
+        let pasteString = String(cString: string)
+        performOnMainSync {
+            guard let userdata = UnsafeMutableRawPointer(bitPattern: userdataAddress) else {
+                return
+            }
+
+            let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+            // TODO: Replace this temporary auto-confirm policy with a paste confirmation UI.
+            _ = TerminalClipboardBridge.completeStandardRead(
+                clipboard: GHOSTTY_CLIPBOARD_STANDARD,
+                string: pasteString,
+                surface: view.surface,
+                state: state,
+                confirmed: true
+            )
+        }
     }
 
     nonisolated private static func writeClipboard(
@@ -540,6 +578,14 @@ private final class GhosttyRuntime {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(string, forType: .string)
         }
+    }
+
+    nonisolated private static func performOnMainSync<T>(_ body: @escaping () -> T) -> T {
+        if Thread.isMainThread {
+            return body()
+        }
+
+        return DispatchQueue.main.sync(execute: body)
     }
 }
 

@@ -49,8 +49,11 @@ final class GhosttyDependencyTests: XCTestCase {
         let script = try String(contentsOf: root.appending(path: "script/ensure_ghosttykit.sh"), encoding: .utf8)
 
         XCTAssertTrue(script.contains("STAMP_FILE=\"$STAMP_DIR/ghosttykit-head.txt\""))
+        XCTAssertTrue(script.contains("$(uname -m)"))
+        XCTAssertTrue(script.contains("Apple Silicon Macs only"))
         XCTAssertTrue(script.contains("GHOSTTY_HEAD=\"$(git rev-parse HEAD)\""))
         XCTAssertTrue(script.contains("has_required_outputs"))
+        XCTAssertTrue(script.contains("macos-arm64/Headers/ghostty.h"))
         XCTAssertTrue(script.contains("zig-out/share/ghostty"))
         XCTAssertTrue(script.contains("NIRITTY_GHOSTTYKIT_FORCE_REBUILD"))
         XCTAssertTrue(script.contains("printf '%s\\n' \"$GHOSTTY_HEAD\" >\"$STAMP_FILE\""))

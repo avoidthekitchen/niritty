@@ -9,6 +9,13 @@ STAMP_DIR="$ROOT_DIR/.build/niritty"
 STAMP_FILE="$STAMP_DIR/ghosttykit-head.txt"
 ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-$ROOT_DIR/.build/zig-global-cache}"
 
+if [[ "$(uname -m)" != "arm64" ]]; then
+  echo "Niritty GhosttyKit bootstrap currently supports Apple Silicon Macs only." >&2
+  echo "Expected host architecture: arm64" >&2
+  echo "Actual host architecture: $(uname -m)" >&2
+  exit 1
+fi
+
 if [[ ! -d "$GHOSTTY_DIR/.git" && ! -f "$GHOSTTY_DIR/.git" ]]; then
   echo "Ghostty submodule is missing. Run: git submodule update --init --recursive Vendor/ghostty" >&2
   exit 1

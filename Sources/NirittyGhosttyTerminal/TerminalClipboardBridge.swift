@@ -7,7 +7,8 @@ enum TerminalClipboardBridge {
         string: String?,
         surface: ghostty_surface_t?,
         state: UnsafeMutableRawPointer?,
-        complete: (ghostty_surface_t, String, UnsafeMutableRawPointer?) -> Void = completeClipboardRequest
+        confirmed: Bool = false,
+        complete: (ghostty_surface_t, String, UnsafeMutableRawPointer?, Bool) -> Void = completeClipboardRequest
     ) -> Bool {
         guard canCompleteStandardRead(
             clipboard: clipboard,
@@ -19,7 +20,7 @@ enum TerminalClipboardBridge {
             return false
         }
 
-        complete(surface, string, state)
+        complete(surface, string, state, confirmed)
         return true
     }
 
@@ -34,10 +35,11 @@ enum TerminalClipboardBridge {
     private static func completeClipboardRequest(
         surface: ghostty_surface_t,
         string: String,
-        state: UnsafeMutableRawPointer?
+        state: UnsafeMutableRawPointer?,
+        confirmed: Bool
     ) {
         string.withCString { pointer in
-            ghostty_surface_complete_clipboard_request(surface, pointer, state, false)
+            ghostty_surface_complete_clipboard_request(surface, pointer, state, confirmed)
         }
     }
 }
