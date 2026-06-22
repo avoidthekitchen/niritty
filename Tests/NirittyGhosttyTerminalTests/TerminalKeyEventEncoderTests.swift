@@ -14,16 +14,63 @@ final class TerminalKeyEventEncoderTests: XCTestCase {
         )
     }
 
-    func testDeleteCarriesBackspaceTextAndStableCodepoint() {
+    func testDeleteUsesStructuredKeyWithoutControlText() {
         let deleteEvent = keyEvent(keyCode: 51, characters: "\u{7F}")
         let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: deleteEvent, action: GHOSTTY_ACTION_PRESS)
 
-        XCTAssertEqual(TerminalKeyEventEncoder.text(for: deleteEvent), "\u{7F}")
+        XCTAssertNil(TerminalKeyEventEncoder.text(for: deleteEvent))
         XCTAssertEqual(keyEvent.keycode, 51)
-        XCTAssertEqual(keyEvent.unshifted_codepoint, 0x7F)
+        XCTAssertEqual(keyEvent.unshifted_codepoint, 0x08)
     }
 
-    func testSpecialKeysUseStableCodepoints() {
+    func testModifiedDeleteUsesStructuredKeyWithoutControlText() {
+        let deleteEvent = keyEvent(keyCode: 51, characters: "\u{7F}", modifiers: .option)
+        let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: deleteEvent, action: GHOSTTY_ACTION_PRESS)
+
+        XCTAssertNil(TerminalKeyEventEncoder.text(for: deleteEvent))
+        XCTAssertEqual(keyEvent.keycode, 51)
+        XCTAssertEqual(keyEvent.unshifted_codepoint, 0x08)
+        XCTAssertTrue(keyEvent.mods.rawValue & GHOSTTY_MODS_ALT.rawValue != 0)
+    }
+
+    func testForwardDeleteUsesStructuredKeyWithoutPrivateUseText() {
+        let forwardDeleteEvent = keyEvent(keyCode: 117, characters: "\u{F728}")
+        let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: forwardDeleteEvent, action: GHOSTTY_ACTION_PRESS)
+
+        XCTAssertNil(TerminalKeyEventEncoder.text(for: forwardDeleteEvent))
+        XCTAssertEqual(keyEvent.keycode, 117)
+    }
+
+    func testSyntheticBackspaceEventUsesStructuredKeyWithoutControlText() throws {
+        let event = try XCTUnwrap(TerminalKeyEventEncoder.syntheticKeyDown(
+            keyCode: 51,
+            characters: "\u{7F}",
+            modifiers: [],
+            windowNumber: 7
+        ))
+        let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: event, action: GHOSTTY_ACTION_PRESS)
+
+        XCTAssertEqual(event.type, .keyDown)
+        XCTAssertNil(TerminalKeyEventEncoder.text(for: event))
+        XCTAssertEqual(keyEvent.keycode, 51)
+        XCTAssertEqual(keyEvent.unshifted_codepoint, 0x08)
+    }
+
+    func testSyntheticForwardDeleteEventMatchesGhosttyForwardDeleteShape() throws {
+        let event = try XCTUnwrap(TerminalKeyEventEncoder.syntheticKeyDown(
+            keyCode: 117,
+            characters: "\u{F728}",
+            modifiers: [],
+            windowNumber: 7
+        ))
+        let keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: event, action: GHOSTTY_ACTION_PRESS)
+
+        XCTAssertEqual(event.type, .keyDown)
+        XCTAssertNil(TerminalKeyEventEncoder.text(for: event))
+        XCTAssertEqual(keyEvent.keycode, 117)
+    }
+
+    func testSpecialKeysUseDynamicUnshiftedCodepoints() {
         XCTAssertEqual(
             TerminalKeyEventEncoder.ghosttyKeyEvent(
                 from: keyEvent(keyCode: 36, characters: "\r"),

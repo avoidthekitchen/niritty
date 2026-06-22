@@ -51,7 +51,6 @@ public struct GhosttyTerminalView: NSViewRepresentable {
     public func updateNSView(_ nsView: TerminalSurfaceView, context: Context) {
         nsView.coordinator = context.coordinator
         nsView.setWorkspaceFocus(isFocused)
-        nsView.setNeedsDisplay(nsView.bounds)
 
         if window.restoreMetadata.isTerminalExited {
             nsView.markHostTerminalExited()
@@ -82,22 +81,33 @@ public struct GhosttyTerminalView: NSViewRepresentable {
 }
 
 public final class TerminalSurfaceView: NSView {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "app.niritty.Niritty",
+        category: "TerminalInput"
+    )
+
     fileprivate var coordinator: GhosttyTerminalView.Coordinator?
 
     nonisolated(unsafe) fileprivate var surface: ghostty_surface_t?
     private let runtime = GhosttyRuntime.shared
+    private let inputLogID = String(UUID().uuidString.prefix(8))
     private var isWorkspaceFocused = false
     private var workingDirectory: URL?
+    private var command: String?
     private var initializationErrorView: NSView?
+    nonisolated(unsafe) private var keyDownMonitor: Any?
+    private var monitoredDeleteEventTimestamps: [TimeInterval] = []
 
     init(
         workingDirectory: URL?,
-        coordinator: GhosttyTerminalView.Coordinator?
+        coordinator: GhosttyTerminalView.Coordinator?,
+        command: String? = nil
     ) {
         self.coordinator = coordinator
         self.workingDirectory = workingDirectory
+        self.command = command
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
-        wantsLayer = true
+        installKeyDownMonitor()
         createSurface(workingDirectory: workingDirectory)
     }
 
@@ -106,6 +116,9 @@ public final class TerminalSurfaceView: NSView {
     }
 
     deinit {
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
+        }
         if let surface {
             ghostty_surface_free(surface)
         }
@@ -138,19 +151,15 @@ public final class TerminalSurfaceView: NSView {
     }
 
     public override func becomeFirstResponder() -> Bool {
+        Self.logger.info("Terminal became first responder, viewID: \(self.inputLogID, privacy: .public), windowNumber: \(self.window?.windowNumber ?? -1)")
         focusDidChange(true)
         return true
     }
 
     public override func resignFirstResponder() -> Bool {
+        Self.logger.info("Terminal resigned first responder, viewID: \(self.inputLogID, privacy: .public), windowNumber: \(self.window?.windowNumber ?? -1)")
         focusDidChange(false)
         return true
-    }
-
-    public override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard let surface else { return }
-        ghostty_surface_draw(surface)
     }
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -158,6 +167,13 @@ public final class TerminalSurfaceView: NSView {
     }
 
     public override func keyDown(with event: NSEvent) {
+        if consumeDuplicateMonitoredDeleteEvent(event) {
+            Self.logger.info(
+                "Skipping Delete keyDown already routed by local event monitor, viewID: \(self.inputLogID, privacy: .public), keyCode: \(event.keyCode), timestamp: \(event.timestamp)"
+            )
+            return
+        }
+
         coordinator?.focusWindow()
         setWorkspaceFocus(true)
 
@@ -170,6 +186,16 @@ public final class TerminalSurfaceView: NSView {
 
     public override func keyUp(with event: NSEvent) {
         sendKey(event, action: GHOSTTY_ACTION_RELEASE)
+    }
+
+    public override func deleteBackward(_ sender: Any?) {
+        Self.logger.info("Routing deleteBackward responder action to terminal Backspace input, viewID: \(self.inputLogID, privacy: .public)")
+        sendSyntheticKey(keyCode: 51, characters: "\u{7F}")
+    }
+
+    public override func deleteForward(_ sender: Any?) {
+        Self.logger.info("Routing deleteForward responder action to terminal Forward Delete input, viewID: \(self.inputLogID, privacy: .public)")
+        sendSyntheticKey(keyCode: 117, characters: "\u{F728}")
     }
 
     public override func mouseDown(with event: NSEvent) {
@@ -213,6 +239,84 @@ public final class TerminalSurfaceView: NSView {
             super.otherMouseUp(with: event)
         })
     }
+
+#if DEBUG
+    @discardableResult
+    func debugSendSyntheticKeyPressAndReleaseForTesting(
+        keyCode: UInt16,
+        characters: String,
+        charactersIgnoringModifiers: String? = nil,
+        modifierFlags: NSEvent.ModifierFlags = []
+    ) -> Bool {
+        guard let window else { return false }
+        let timestamp = ProcessInfo.processInfo.systemUptime
+        guard let press = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: modifierFlags,
+            timestamp: timestamp,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: charactersIgnoringModifiers ?? characters,
+            isARepeat: false,
+            keyCode: keyCode
+        ), let release = NSEvent.keyEvent(
+            with: .keyUp,
+            location: .zero,
+            modifierFlags: modifierFlags,
+            timestamp: timestamp + 0.001,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: keyCode
+        ) else {
+            return false
+        }
+
+        coordinator?.focusWindow()
+        setWorkspaceFocus(true)
+        sendKey(press, action: GHOSTTY_ACTION_PRESS)
+        sendKey(release, action: GHOSTTY_ACTION_RELEASE)
+        return true
+    }
+
+    func debugHandleMonitoredKeyDownForTesting(_ event: NSEvent) -> NSEvent? {
+        handleMonitoredKeyDown(event)
+    }
+
+    func debugWouldConsumeDuplicateMonitoredDeleteForTesting(_ event: NSEvent) -> Bool {
+        consumeDuplicateMonitoredDeleteEvent(event)
+    }
+
+    func debugVisibleTextForTesting() -> String {
+        guard let surface else { return "" }
+        var text = ghostty_text_s()
+        let selection = ghostty_selection_s(
+            top_left: ghostty_point_s(
+                tag: GHOSTTY_POINT_VIEWPORT,
+                coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+                x: 0,
+                y: 0
+            ),
+            bottom_right: ghostty_point_s(
+                tag: GHOSTTY_POINT_VIEWPORT,
+                coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+                x: 0,
+                y: 0
+            ),
+            rectangle: false
+        )
+        guard ghostty_surface_read_text(surface, selection, &text) else {
+            return ""
+        }
+        defer { ghostty_surface_free_text(surface, &text) }
+        let buffer = UnsafeRawBufferPointer(start: text.text, count: Int(text.text_len))
+        return String(decoding: buffer, as: UTF8.self)
+    }
+#endif
 
     public override func mouseMoved(with event: NSEvent) {
         sendMousePosition(event)
@@ -294,9 +398,13 @@ public final class TerminalSurfaceView: NSView {
         config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
         let path = workingDirectory?.path()
+        let command = self.command
         surface = path.withCString { workingDirectoryPointer in
             config.working_directory = workingDirectoryPointer
-            return ghostty_surface_new(app, &config)
+            return command.withCString { commandPointer in
+                config.command = commandPointer
+                return ghostty_surface_new(app, &config)
+            }
         }
 
         syncSurfaceSize()
@@ -334,16 +442,118 @@ public final class TerminalSurfaceView: NSView {
     private func sendKey(_ event: NSEvent, action: ghostty_input_action_e) {
         guard let surface else { return }
         var keyEvent = TerminalKeyEventEncoder.ghosttyKeyEvent(from: event, action: action)
+        let text = TerminalKeyEventEncoder.text(for: event)
+        let isDelete = isDeleteKey(event)
 
-        if let text = TerminalKeyEventEncoder.text(for: event) {
+        if isDelete {
+            var bindingFlags = ghostty_binding_flags_e(rawValue: 0)
+            let isBinding = ghostty_surface_key_is_binding(surface, keyEvent, &bindingFlags)
+            Self.logger.info(
+                "Sending Delete key to Ghostty, viewID: \(self.inputLogID, privacy: .public), keyCode: \(keyEvent.keycode), text: \(text ?? "nil", privacy: .public), unshifted: \(keyEvent.unshifted_codepoint), mods: \(keyEvent.mods.rawValue), consumedMods: \(keyEvent.consumed_mods.rawValue), action: \(keyEvent.action.rawValue), isBinding: \(isBinding), bindingFlags: \(bindingFlags.rawValue)"
+            )
+        }
+
+        var consumed = false
+        if let text {
             text.withCString { pointer in
                 keyEvent.text = pointer
-                ghostty_surface_key(surface, keyEvent)
+                consumed = ghostty_surface_key(surface, keyEvent)
             }
         } else {
-            ghostty_surface_key(surface, keyEvent)
+            consumed = ghostty_surface_key(surface, keyEvent)
         }
-        needsDisplay = true
+
+        if isDelete {
+            Self.logger.info("Ghostty Delete key result, viewID: \(self.inputLogID, privacy: .public), consumed: \(consumed)")
+        }
+
+    }
+
+    private func installKeyDownMonitor() {
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleMonitoredKeyDown(event) ?? event
+        }
+    }
+
+    private func handleMonitoredKeyDown(_ event: NSEvent) -> NSEvent? {
+        guard isDeleteKey(event) else {
+            return event
+        }
+
+        let eventMatchesWindow = isEventForCurrentWindow(event)
+        let isFirstResponder = isFirstResponderForCurrentWindow()
+        guard isWorkspaceFocused,
+              eventMatchesWindow,
+              isFirstResponder else {
+            Self.logger.info(
+                "Ignoring Delete keyDown in local event monitor, viewID: \(self.inputLogID, privacy: .public), keyCode: \(event.keyCode), workspaceFocused: \(self.isWorkspaceFocused), eventMatchesWindow: \(eventMatchesWindow), isFirstResponder: \(isFirstResponder), firstResponderClass: \(self.firstResponderClassName, privacy: .public), eventWindowNumber: \(event.windowNumber), viewWindowNumber: \(self.window?.windowNumber ?? -1)"
+            )
+            return event
+        }
+
+        Self.logger.info(
+            "Routing Delete keyDown from local event monitor to terminal input, viewID: \(self.inputLogID, privacy: .public), keyCode: \(event.keyCode), repeat: \(event.isARepeat)"
+        )
+        monitoredDeleteEventTimestamps.append(event.timestamp)
+        coordinator?.focusWindow()
+        setWorkspaceFocus(true)
+        sendKey(event, action: event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS)
+        return nil
+    }
+
+    private func consumeDuplicateMonitoredDeleteEvent(_ event: NSEvent) -> Bool {
+        guard isDeleteKey(event) else {
+            return false
+        }
+
+        let matchIndex = monitoredDeleteEventTimestamps.firstIndex { timestamp in
+            timestamp == event.timestamp
+        }
+        guard let matchIndex else {
+            return false
+        }
+
+        monitoredDeleteEventTimestamps.remove(at: matchIndex)
+        return true
+    }
+
+    private func isEventForCurrentWindow(_ event: NSEvent) -> Bool {
+        guard let window else {
+            return false
+        }
+
+        return event.window === window || event.windowNumber == window.windowNumber
+    }
+
+    private func isFirstResponderForCurrentWindow() -> Bool {
+        window?.firstResponder === self
+    }
+
+    private var firstResponderClassName: String {
+        guard let firstResponder = window?.firstResponder else {
+            return "nil"
+        }
+        return String(describing: type(of: firstResponder))
+    }
+
+    private func isDeleteKey(_ event: NSEvent) -> Bool {
+        event.keyCode == 51 || event.keyCode == 117
+    }
+
+    private func sendSyntheticKey(keyCode: UInt16, characters: String) {
+        guard let event = TerminalKeyEventEncoder.syntheticKeyDown(
+            keyCode: keyCode,
+            characters: characters,
+            modifiers: NSEvent.modifierFlags,
+            windowNumber: window?.windowNumber ?? 0
+        ) else {
+            Self.logger.error("Failed to synthesize terminal key event for keyCode \(keyCode)")
+            return
+        }
+
+        coordinator?.focusWindow()
+        setWorkspaceFocus(true)
+        sendKey(event, action: GHOSTTY_ACTION_PRESS)
     }
 
     private func sendMouseButton(

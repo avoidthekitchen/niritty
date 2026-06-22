@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_RESOURCES="$ROOT_DIR/dist/Niritty.app/Contents/Resources/ghostty"
+APP_RESOURCES_ROOT="$ROOT_DIR/dist/Niritty.app/Contents/Resources"
+APP_RESOURCES="$APP_RESOURCES_ROOT/ghostty"
+APP_TERMINFO="$APP_RESOURCES_ROOT/terminfo"
 RETURN_MARKER="$(mktemp -u /tmp/niritty-return.XXXXXX)"
 DELETE_MARKER="$(mktemp -u /tmp/niritty-delete.XXXXXX)"
 DELETE_MARKER_WITH_SUFFIX="${DELETE_MARKER}x"
@@ -16,6 +18,21 @@ trap 'pkill -x Niritty >/dev/null 2>&1 || true; rm -f "$RETURN_MARKER" "$DELETE_
 
 script/test.sh
 script/build_and_run.sh --verify
+
+if [[ ! -d "$APP_RESOURCES/shell-integration" ]]; then
+  echo "Missing packaged Ghostty shell integration resources at $APP_RESOURCES/shell-integration" >&2
+  exit 1
+fi
+
+if [[ ! -d "$APP_RESOURCES/themes" ]]; then
+  echo "Missing packaged Ghostty theme resources at $APP_RESOURCES/themes" >&2
+  exit 1
+fi
+
+if [[ ! -f "$APP_TERMINFO/78/xterm-ghostty" ]]; then
+  echo "Missing packaged Ghostty terminfo at $APP_TERMINFO/78/xterm-ghostty" >&2
+  exit 1
+fi
 
 osascript -e 'tell application "System Events" to tell process "Niritty" to click button 1 of group 1 of window 1'
 sleep 1
@@ -94,16 +111,6 @@ fi
 
 if [[ -f "$FOCUS_RIGHT_DIR/$FOCUS_MARKER" ]]; then
   echo "Terminal focus-left shortcut left typing in the right terminal." >&2
-  exit 1
-fi
-
-if [[ ! -d "$APP_RESOURCES/shell-integration" ]]; then
-  echo "Missing packaged Ghostty shell integration resources at $APP_RESOURCES/shell-integration" >&2
-  exit 1
-fi
-
-if [[ ! -d "$APP_RESOURCES/themes" ]]; then
-  echo "Missing packaged Ghostty theme resources at $APP_RESOURCES/themes" >&2
   exit 1
 fi
 

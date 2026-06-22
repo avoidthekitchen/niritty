@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GHOSTTY_DIR="$ROOT_DIR/Vendor/ghostty"
 GHOSTTYKIT_DIR="$GHOSTTY_DIR/macos/GhosttyKit.xcframework"
 GHOSTTY_RESOURCES_DIR="$GHOSTTY_DIR/zig-out/share/ghostty"
+GHOSTTY_TERMINFO_FILE="$GHOSTTY_DIR/zig-out/share/terminfo/78/xterm-ghostty"
 STAMP_DIR="$ROOT_DIR/.build/niritty"
 STAMP_FILE="$STAMP_DIR/ghosttykit-head.txt"
 ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-$ROOT_DIR/.build/zig-global-cache}"
@@ -30,7 +31,8 @@ has_required_outputs() {
     [[ -f "$GHOSTTYKIT_DIR/macos-arm64/Headers/ghostty.h" ]] &&
     [[ -f "$GHOSTTYKIT_DIR/macos-arm64/libghostty-internal-fat.a" ]] &&
     [[ -d "$GHOSTTY_RESOURCES_DIR/shell-integration" ]] &&
-    [[ -d "$GHOSTTY_RESOURCES_DIR/themes" ]]
+    [[ -d "$GHOSTTY_RESOURCES_DIR/themes" ]] &&
+    [[ -f "$GHOSTTY_TERMINFO_FILE" ]]
 }
 
 if [[ "${NIRITTY_GHOSTTYKIT_FORCE_REBUILD:-0}" != "1" ]] &&

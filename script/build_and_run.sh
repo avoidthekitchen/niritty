@@ -14,7 +14,9 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
-GHOSTTY_RESOURCES="$ROOT_DIR/Vendor/ghostty/zig-out/share/ghostty"
+GHOSTTY_SHARE="$ROOT_DIR/Vendor/ghostty/zig-out/share"
+GHOSTTY_RESOURCES="$GHOSTTY_SHARE/ghostty"
+GHOSTTY_TERMINFO="$GHOSTTY_SHARE/terminfo"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -32,6 +34,14 @@ if [[ -d "$GHOSTTY_RESOURCES" ]]; then
   cp -R "$GHOSTTY_RESOURCES" "$APP_RESOURCES/ghostty"
 else
   echo "Missing Ghostty resources at $GHOSTTY_RESOURCES" >&2
+  echo "Run script/bootstrap.sh before packaging Niritty." >&2
+  exit 1
+fi
+
+if [[ -f "$GHOSTTY_TERMINFO/78/xterm-ghostty" ]]; then
+  cp -R "$GHOSTTY_TERMINFO" "$APP_RESOURCES/terminfo"
+else
+  echo "Missing Ghostty terminfo at $GHOSTTY_TERMINFO/78/xterm-ghostty" >&2
   echo "Run script/bootstrap.sh before packaging Niritty." >&2
   exit 1
 fi

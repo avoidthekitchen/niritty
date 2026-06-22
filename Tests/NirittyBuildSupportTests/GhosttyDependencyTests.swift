@@ -17,15 +17,20 @@ final class GhosttyDependencyTests: XCTestCase {
         let root = packageRoot
         let fileManager = FileManager.default
         let resources = root.appending(path: "Vendor/ghostty/zig-out/share/ghostty")
+        let terminfo = root.appending(path: "Vendor/ghostty/zig-out/share/terminfo/78/xterm-ghostty")
 
         XCTAssertTrue(fileManager.fileExists(atPath: resources.appending(path: "shell-integration").path()))
         XCTAssertTrue(fileManager.fileExists(atPath: resources.appending(path: "themes").path()))
+        XCTAssertTrue(fileManager.fileExists(atPath: terminfo.path()))
 
         let script = try String(contentsOf: root.appending(path: "script/build_and_run.sh"), encoding: .utf8)
+        XCTAssertTrue(script.contains("GHOSTTY_SHARE="))
         XCTAssertTrue(script.contains("GHOSTTY_RESOURCES="))
+        XCTAssertTrue(script.contains("GHOSTTY_TERMINFO="))
         XCTAssertTrue(script.contains("APP_RESOURCES="))
         XCTAssertTrue(script.contains("\"$ROOT_DIR/script/bootstrap.sh\"\nswift build"))
         XCTAssertTrue(script.contains("cp -R \"$GHOSTTY_RESOURCES\" \"$APP_RESOURCES/ghostty\""))
+        XCTAssertTrue(script.contains("cp -R \"$GHOSTTY_TERMINFO\" \"$APP_RESOURCES/terminfo\""))
         XCTAssertTrue(script.contains("Run script/bootstrap.sh before packaging Niritty."))
     }
 
@@ -39,9 +44,12 @@ final class GhosttyDependencyTests: XCTestCase {
         XCTAssertTrue(bootstrap.contains("git submodule update --init --recursive Vendor/ghostty"))
         XCTAssertTrue(bootstrap.contains("macos-arm64/Headers/ghostty.h"))
         XCTAssertTrue(bootstrap.contains("zig-out/share/ghostty"))
+        XCTAssertTrue(bootstrap.contains("zig-out/share/terminfo/78/xterm-ghostty"))
         XCTAssertTrue(test.contains("\"$ROOT_DIR/script/bootstrap.sh\""))
         XCTAssertTrue(test.contains("cd \"$ROOT_DIR\"\nswift test"))
         XCTAssertTrue(integrationTest.contains("script/test.sh"))
+        XCTAssertTrue(integrationTest.contains("APP_TERMINFO="))
+        XCTAssertTrue(integrationTest.contains("$APP_TERMINFO/78/xterm-ghostty"))
     }
 
     func testEnsureGhosttyKitTracksSubmoduleCommitAndRequiredOutputs() throws {
@@ -55,6 +63,7 @@ final class GhosttyDependencyTests: XCTestCase {
         XCTAssertTrue(script.contains("has_required_outputs"))
         XCTAssertTrue(script.contains("macos-arm64/Headers/ghostty.h"))
         XCTAssertTrue(script.contains("zig-out/share/ghostty"))
+        XCTAssertTrue(script.contains("zig-out/share/terminfo/78/xterm-ghostty"))
         XCTAssertTrue(script.contains("NIRITTY_GHOSTTYKIT_FORCE_REBUILD"))
         XCTAssertTrue(script.contains("printf '%s\\n' \"$GHOSTTY_HEAD\" >\"$STAMP_FILE\""))
     }

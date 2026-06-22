@@ -274,13 +274,15 @@ private struct ColumnWindowCard: View {
         .padding(12)
         .frame(width: width, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.textBackgroundColor))
+        )
         .id(window.id)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isFocused ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var windowHeader: some View {
@@ -376,7 +378,6 @@ private struct TerminalWindowContent: View {
         }
         .frame(minHeight: 260)
         .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

@@ -2,6 +2,26 @@ import AppKit
 import GhosttyKit
 
 enum TerminalKeyEventEncoder {
+    static func syntheticKeyDown(
+        keyCode: UInt16,
+        characters: String,
+        modifiers: NSEvent.ModifierFlags,
+        windowNumber: Int
+    ) -> NSEvent? {
+        NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: modifiers,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: windowNumber,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: characters,
+            isARepeat: false,
+            keyCode: keyCode
+        )
+    }
+
     static func ghosttyKeyEvent(from event: NSEvent, action: ghostty_input_action_e) -> ghostty_input_key_s {
         var keyEvent = ghostty_input_key_s()
         keyEvent.action = action
@@ -20,13 +40,13 @@ enum TerminalKeyEventEncoder {
             return nil
         }
 
+        if event.keyCode == 51 {
+            return nil
+        }
+
         if text.count == 1,
            let scalar = text.unicodeScalars.first {
             if scalar.value < 0x20 || scalar.value == 0x7F {
-                if event.keyCode == 51 {
-                    return "\u{7F}"
-                }
-
                 let translated = event.characters(byApplyingModifiers: event.modifierFlags.subtracting(.control))
                 guard let translatedScalar = translated?.utf8.first,
                       translatedScalar >= 0x20,
@@ -67,19 +87,6 @@ enum TerminalKeyEventEncoder {
     }
 
     private static func unshiftedCodepoint(from event: NSEvent) -> UInt32 {
-        switch event.keyCode {
-        case 36:
-            return 0x0D
-        case 48:
-            return 0x09
-        case 51:
-            return 0x7F
-        case 53:
-            return 0x1B
-        default:
-            break
-        }
-
         guard event.type == .keyDown || event.type == .keyUp else {
             return 0
         }
