@@ -1,6 +1,6 @@
 # Niritty
 
-Niritty is a planned native macOS workspace environment for terminal and browser windows arranged with Niri-style scrollable columns.
+Niritty is a planned native macOS workspace environment for terminal and browser windows arranged with [Niri](https://github.com/niri-wm/niri)-style scrollable columns.
 
 The project is currently a working experimental prototype, not a production-ready application. The sections below describe the intended v1 behavior and the scope that is explicitly deferred.
 
