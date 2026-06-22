@@ -12,6 +12,7 @@ struct NirittyApp: App {
     @State private var isShortcutOverlayPresented = false
     @State private var visibleColumnCount = 2
     @State private var pendingPersistenceTask: Task<Void, Never>?
+    @StateObject private var workspaceShortcutEventMonitor = WorkspaceShortcutEventMonitor()
 
     init() {
         _workspaceStack = State(initialValue: Self.loadWorkspaceStack())
@@ -30,6 +31,11 @@ struct NirittyApp: App {
                 .frame(minWidth: 900, minHeight: 560)
                 .onChange(of: workspaceStack) { _, workspaceStack in
                     scheduleWorkspaceStackSave(workspaceStack)
+                }
+                .onAppear {
+                    workspaceShortcutEventMonitor.install { commandID in
+                        performWorkspaceCommand(commandID)
+                    }
                 }
                 .onChange(of: scenePhase) { _, scenePhase in
                     if scenePhase != .active {

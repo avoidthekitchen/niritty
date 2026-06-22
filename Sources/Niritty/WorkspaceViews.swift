@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import NirittyGhosttyTerminal
 import NirittyWorkspaceModel
 import SwiftUI
 
@@ -45,6 +46,9 @@ struct WorkspaceStrip: View {
     let focusWindow: (WorkspaceWindow.ID) -> Void
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
+    let updateTerminalCurrentDirectory: (URL, WorkspaceWindow.ID) -> Void
+    let markTerminalExited: (WorkspaceWindow.ID) -> Void
+    let restartTerminal: (WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
     let visibleColumnCountChanged: (Int) -> Void
@@ -86,6 +90,9 @@ struct WorkspaceStrip: View {
                                     focusWindow: focusWindow,
                                     closeWindow: closeWindow,
                                     commitBrowserURL: commitBrowserURL,
+                                    updateTerminalCurrentDirectory: updateTerminalCurrentDirectory,
+                                    markTerminalExited: markTerminalExited,
+                                    restartTerminal: restartTerminal,
                                     rotateColumnWidth: rotateColumnWidth,
                                     performWorkspaceCommand: performWorkspaceCommand
                                 )
@@ -179,6 +186,9 @@ private struct PlaceholderColumn: View {
     let focusWindow: (WorkspaceWindow.ID) -> Void
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
+    let updateTerminalCurrentDirectory: (URL, WorkspaceWindow.ID) -> Void
+    let markTerminalExited: (WorkspaceWindow.ID) -> Void
+    let restartTerminal: (WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
@@ -202,6 +212,9 @@ private struct PlaceholderColumn: View {
                     focusWindow: focusWindow,
                     closeWindow: closeWindow,
                     commitBrowserURL: commitBrowserURL,
+                    updateTerminalCurrentDirectory: updateTerminalCurrentDirectory,
+                    markTerminalExited: markTerminalExited,
+                    restartTerminal: restartTerminal,
                     rotateColumnWidth: rotateColumnWidth,
                     performWorkspaceCommand: performWorkspaceCommand
                 )
@@ -217,6 +230,9 @@ private struct ColumnWindowCard: View {
     let focusWindow: (WorkspaceWindow.ID) -> Void
     let closeWindow: (WorkspaceWindow.ID) -> Void
     let commitBrowserURL: (URL, WorkspaceWindow.ID) -> Void
+    let updateTerminalCurrentDirectory: (URL, WorkspaceWindow.ID) -> Void
+    let markTerminalExited: (WorkspaceWindow.ID) -> Void
+    let restartTerminal: (WorkspaceWindow.ID) -> Void
     let rotateColumnWidth: (WorkspaceWindow.ID) -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
@@ -226,11 +242,21 @@ private struct ColumnWindowCard: View {
 
             WindowContent(
                 window: window,
+                isFocused: isFocused,
                 focusWindow: {
                     focusWindow(window.id)
                 },
                 commitBrowserURL: { url in
                     commitBrowserURL(url, window.id)
+                },
+                updateTerminalCurrentDirectory: { directory in
+                    updateTerminalCurrentDirectory(directory, window.id)
+                },
+                markTerminalExited: {
+                    markTerminalExited(window.id)
+                },
+                restartTerminal: {
+                    restartTerminal(window.id)
                 },
                 performWorkspaceCommand: performWorkspaceCommand
             )
@@ -248,13 +274,15 @@ private struct ColumnWindowCard: View {
         .padding(12)
         .frame(width: width, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.textBackgroundColor))
+        )
         .id(window.id)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isFocused ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var windowHeader: some View {
@@ -283,8 +311,12 @@ private struct ColumnWindowCard: View {
 
 private struct WindowContent: View {
     let window: WorkspaceWindow
+    let isFocused: Bool
     let focusWindow: () -> Void
     let commitBrowserURL: (URL) -> Void
+    let updateTerminalCurrentDirectory: (URL) -> Void
+    let markTerminalExited: () -> Void
+    let restartTerminal: () -> Void
     let performWorkspaceCommand: (WorkspaceCommandID) -> Void
 
     var body: some View {
@@ -302,11 +334,50 @@ private struct WindowContent: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         case .terminal:
-            Text("Terminal Window (placeholder)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            TerminalWindowContent(
+                window: window,
+                isFocused: isFocused,
+                focusWindow: focusWindow,
+                updateCurrentDirectory: updateTerminalCurrentDirectory,
+                markExited: markTerminalExited,
+                restart: restartTerminal,
+                performWorkspaceCommand: performWorkspaceCommand
+            )
         }
+    }
+}
+
+private struct TerminalWindowContent: View {
+    let window: WorkspaceWindow
+    let isFocused: Bool
+    let focusWindow: () -> Void
+    let updateCurrentDirectory: (URL) -> Void
+    let markExited: () -> Void
+    let restart: () -> Void
+    let performWorkspaceCommand: (WorkspaceCommandID) -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            GhosttyTerminalView(
+                window: window,
+                isFocused: isFocused,
+                focusWindow: focusWindow,
+                updateCurrentDirectory: updateCurrentDirectory,
+                markExited: markExited,
+                restart: restart,
+                performWorkspaceCommand: performWorkspaceCommand
+            )
+
+            if window.restoreMetadata.isTerminalExited {
+                Button("Restart") {
+                    restart()
+                }
+                .buttonStyle(.bordered)
+                .padding(8)
+            }
+        }
+        .frame(minHeight: 260)
+        .background(Color.black)
     }
 }
 

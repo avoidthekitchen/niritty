@@ -70,7 +70,7 @@ extension WorkspaceStack {
                             WorkspaceWindow(
                                 id: windowSnapshot.id,
                                 kind: windowSnapshot.kind,
-                                restoreMetadata: windowSnapshot.restoreMetadata
+                                restoreMetadata: windowSnapshot.restoreMetadata.restoredFreshProcessMetadata(for: windowSnapshot.kind)
                             )
                         }
                     )
@@ -96,5 +96,17 @@ extension WorkspaceStack {
             workspaces: workspaces,
             focusedWorkspaceID: focusedWorkspaceID
         )
+    }
+}
+
+private extension WindowRestoreMetadata {
+    func restoredFreshProcessMetadata(for kind: WindowKind) -> WindowRestoreMetadata {
+        guard kind == .terminal else {
+            return self
+        }
+
+        var metadata = self
+        metadata.isTerminalExited = false
+        return metadata
     }
 }

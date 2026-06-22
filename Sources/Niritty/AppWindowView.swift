@@ -31,7 +31,7 @@ struct AppWindowView: View {
 
                     HStack {
                         Button("New Terminal Window") {
-                            workspaceStack.createWindow(kind: .terminal)
+                            workspaceStack.createTerminalWindow()
                         }
 
                         Button("New Browser Window") {
@@ -56,6 +56,15 @@ struct AppWindowView: View {
                         },
                         commitBrowserURL: { url, windowID in
                             workspaceStack.commitBrowserURL(url, for: windowID)
+                        },
+                        updateTerminalCurrentDirectory: { directory, windowID in
+                            workspaceStack.updateTerminalCurrentDirectory(directory, for: windowID)
+                        },
+                        markTerminalExited: { windowID in
+                            workspaceStack.markTerminalExited(windowID: windowID)
+                        },
+                        restartTerminal: { windowID in
+                            workspaceStack.restartTerminal(windowID: windowID)
                         },
                         rotateColumnWidth: { windowID in
                             workspaceStack.focusWindow(id: windowID)

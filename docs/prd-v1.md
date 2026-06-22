@@ -15,6 +15,18 @@ When implementation details are ambiguous, use [Niri](https://github.com/niri-wm
 - Persist and restore useful layout state without promising full process or browser runtime restoration.
 - Keep the model testable outside the native UI.
 
+## Implementation Status and Clarifications
+
+The v1 implementation slices are complete. The native app now provides the Workspace Stack model and UI, WKWebView Browser Windows, libghostty Terminal Windows, fixed workspace shortcuts, Column Movement and Column Transfer, semantic Column Width Modes, the Workspace Rail, the Shortcut Overlay, and persistence and restore.
+
+Delivery established these implementation details without expanding product scope:
+
+- Ghostty is vendored as a pinned `Vendor/ghostty` submodule. Bootstrap builds `GhosttyKit.xcframework` locally instead of committing generated framework artifacts.
+- The current Ghostty bootstrap and generated xcframework validation support Apple Silicon. Intel Mac support remains outside the completed v1 implementation.
+- Reserved workspace shortcuts are handled at the app and embedded-surface boundaries, so focus, movement, transfer, and overlay commands continue to work while embedded terminal or browser content owns keyboard focus.
+- Terminal Restore clears the exited-process flag and starts a fresh shell from persisted directory metadata. It does not resurrect the previous process.
+- Browser Restore uses the last committed URL with the shared website data store. It does not restore browser runtime state.
+
 ## Non-Goals
 
 - Command Palette.

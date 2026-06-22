@@ -1,12 +1,11 @@
 import AppKit
-import NirittyWorkspaceModel
 
-enum WorkspaceReservedShortcut {
+public enum WorkspaceReservedShortcut {
     private static let workspaceModifierFlags: NSEvent.ModifierFlags = [.control, .shift]
     private static let movementModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command]
     private static let comparedModifierFlags: NSEvent.ModifierFlags = [.control, .shift, .command, .option]
 
-    static func commandID(for event: NSEvent) -> WorkspaceCommandID? {
+    public static func commandID(for event: NSEvent) -> WorkspaceCommandID? {
         guard event.type == .keyDown else {
             return nil
         }

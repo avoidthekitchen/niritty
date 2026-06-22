@@ -28,6 +28,53 @@ public struct WorkspaceStack: Equatable, Sendable {
         }
 
         let window = WorkspaceWindow(id: UUID(), kind: kind, restoreMetadata: .initial(for: kind))
+        insertWindow(window, in: workspaceIndex)
+    }
+
+    public mutating func createTerminalWindow() {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == focusedWorkspaceID }) else {
+            return
+        }
+
+        let window = WorkspaceWindow(
+            id: UUID(),
+            kind: .terminal,
+            restoreMetadata: WindowRestoreMetadata(
+                browserURL: nil,
+                terminalCurrentDirectory: terminalLaunchDirectory(in: workspaceIndex),
+                isTerminalExited: false
+            )
+        )
+        insertWindow(window, in: workspaceIndex)
+    }
+
+    public mutating func updateTerminalCurrentDirectory(_ directory: URL, for windowID: WorkspaceWindow.ID) {
+        guard let location = windowLocation(for: windowID),
+              workspaces[location.workspaceIndex].columns[location.columnIndex].windows[location.windowIndex].kind == .terminal else {
+            return
+        }
+
+        workspaces[location.workspaceIndex].columns[location.columnIndex].windows[location.windowIndex].restoreMetadata.terminalCurrentDirectory = directory
+    }
+
+    public mutating func markTerminalExited(windowID: WorkspaceWindow.ID) {
+        updateTerminalExitedState(true, for: windowID)
+    }
+
+    public mutating func restartTerminal(windowID: WorkspaceWindow.ID) {
+        updateTerminalExitedState(false, for: windowID)
+    }
+
+    private mutating func updateTerminalExitedState(_ isExited: Bool, for windowID: WorkspaceWindow.ID) {
+        guard let location = windowLocation(for: windowID),
+              workspaces[location.workspaceIndex].columns[location.columnIndex].windows[location.windowIndex].kind == .terminal else {
+            return
+        }
+
+        workspaces[location.workspaceIndex].columns[location.columnIndex].windows[location.windowIndex].restoreMetadata.isTerminalExited = isExited
+    }
+
+    private mutating func insertWindow(_ window: WorkspaceWindow, in workspaceIndex: Int) {
         let column = Column(id: UUID(), widthMode: .half, windows: [window])
         let insertionIndex = workspaces[workspaceIndex].focusedColumnIndex.map { $0 + 1 }
             ?? workspaces[workspaceIndex].columns.endIndex
@@ -168,6 +215,17 @@ public struct WorkspaceStack: Equatable, Sendable {
         }
 
         return nil
+    }
+
+    private func terminalLaunchDirectory(in workspaceIndex: Int) -> URL {
+        if let focusedColumnIndex = workspaces[workspaceIndex].focusedColumnIndex,
+           let focusedWindow = workspaces[workspaceIndex].columns[focusedColumnIndex].windows.first,
+           focusedWindow.kind == .terminal,
+           let terminalCurrentDirectory = focusedWindow.restoreMetadata.terminalCurrentDirectory {
+            return terminalCurrentDirectory
+        }
+
+        return workspaces[workspaceIndex].workspaceRoot
     }
 
     private mutating func moveFocusHorizontally(
@@ -361,16 +419,45 @@ public struct WorkspaceWindow: Identifiable, Equatable, Sendable {
 public struct WindowRestoreMetadata: Codable, Equatable, Sendable {
     public var browserURL: URL?
     public var terminalCurrentDirectory: URL?
+    public var isTerminalExited: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case browserURL
+        case terminalCurrentDirectory
+        case isTerminalExited
+    }
+
+    public init(
+        browserURL: URL?,
+        terminalCurrentDirectory: URL?,
+        isTerminalExited: Bool
+    ) {
+        self.browserURL = browserURL
+        self.terminalCurrentDirectory = terminalCurrentDirectory
+        self.isTerminalExited = isTerminalExited
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        browserURL = try container.decodeIfPresent(URL.self, forKey: .browserURL)
+        terminalCurrentDirectory = try container.decodeIfPresent(URL.self, forKey: .terminalCurrentDirectory)
+        isTerminalExited = try container.decodeIfPresent(Bool.self, forKey: .isTerminalExited) ?? false
+    }
 
     public static let empty = WindowRestoreMetadata(
         browserURL: nil,
-        terminalCurrentDirectory: nil
+        terminalCurrentDirectory: nil,
+        isTerminalExited: false
     )
 
     public static func initial(for kind: WindowKind) -> WindowRestoreMetadata {
         switch kind {
         case .browser:
-            WindowRestoreMetadata(browserURL: URL(string: "about:blank"), terminalCurrentDirectory: nil)
+            WindowRestoreMetadata(
+                browserURL: URL(string: "about:blank"),
+                terminalCurrentDirectory: nil,
+                isTerminalExited: false
+            )
         case .placeholder, .terminal:
             .empty
         }

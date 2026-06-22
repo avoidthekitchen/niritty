@@ -1,8 +1,8 @@
 # Niritty
 
-Niritty is a planned native macOS workspace environment for terminal and browser windows arranged with [Niri](https://github.com/niri-wm/niri)-style scrollable columns.
+Niritty is a native macOS workspace environment for terminal and browser windows arranged with Niri-style scrollable columns. The project is currently a working experimental prototype, not a production-ready application. 
 
-The project is currently a working experimental prototype, not a production-ready application. The sections below describe the intended v1 behavior and the scope that is explicitly deferred.
+The implemented v1 app proves the core workspace, terminal, browser, focus, movement, and restore behavior. The sections below distinguish what is available now from scope explicitly deferred beyond v1.
 
 ## Concept
 
@@ -15,9 +15,9 @@ Niritty treats terminal and browser surfaces as first-class **Windows** inside a
 
 The model is inspired by [Niri](https://niri-wm.github.io/niri/): columns move horizontally inside a workspace, and columns can transfer up or down between workspaces. Window consumption, expulsion, and tabbed columns are planned future concepts, not v1 features.
 
-## Planned V1
+## Implemented V1
 
-Niritty v1 should support:
+Niritty v1 supports:
 
 - one native macOS app window
 - dynamic workspaces with one empty workspace at the bottom
@@ -42,7 +42,7 @@ Niritty v1 should support:
 - restoration of browser URLs
 - restoration of terminal windows as fresh shells in their last known directory
 
-## Planned Shortcuts
+## Implemented Shortcuts
 
 V1 uses fixed workspace shortcuts. Configurable keybindings are deferred, but the command model should be designed so remapping can be added later.
 
@@ -73,12 +73,31 @@ The following are intentionally out of v1 scope:
 
 ## Architecture Direction
 
-V1 is planned as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
+V1 is implemented as a fresh native macOS app shell, not a fork of CMUX or Ghostty.
 
 - App shell: native macOS
 - Terminal engine: `libghostty`
 - Browser engine: `WKWebView`
 - Layout engine: custom Niri-inspired Workspace/Column model
+
+## Development Setup
+
+Ghostty support is experimental and uses a pinned `Vendor/ghostty` submodule plus generated build artifacts. The current GhosttyKit bootstrap is Apple Silicon-only and intentionally validates the generated `macos-arm64` xcframework slice. Intel Macs are not supported yet.
+
+After cloning on an Apple Silicon Mac, initialize the submodule and run the bootstrap script before using raw SwiftPM commands:
+
+```sh
+git submodule update --init --recursive Vendor/ghostty
+./script/bootstrap.sh
+```
+
+Use the project test entrypoint so bootstrap always runs before SwiftPM:
+
+```sh
+./script/test.sh
+```
+
+Raw `swift build` and `swift test` work after bootstrap has produced `GhosttyKit.xcframework` and Ghostty resources. CI should checkout submodules and run `./script/test.sh`.
 
 ## Runtime Telemetry
 
@@ -92,4 +111,4 @@ Useful categories:
 
 - `Workspace`: before/after focused workspace and column state for workspace commands.
 
-See [docs/prd-v1.md](docs/prd-v1.md) for the v1 product requirements draft.
+See [docs/prd-v1.md](docs/prd-v1.md) for the v1 product requirements and implementation clarifications.
